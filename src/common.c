@@ -4,6 +4,72 @@
 
 #include "common.h"
 
+/* memchr copy-pasted from Android Bionic
+ * https://android.googlesource.com/platform/bionic/+/ics-mr0/libc/string/memchr.c
+ */
+void *memchr(const void *mem, int c, size_t memSz)
+{
+	const unsigned char *p = mem;
+	const unsigned char *end = p + memSz;
+	for (;;) {
+		if (p >= end || p[0] == c) break;
+		p++;
+		if (p >= end || p[0] == c) break;
+		p++;
+		if (p >= end || p[0] == c) break;
+		p++;
+		if (p >= end || p[0] == c) break;
+		p++;
+	}
+	if (p >= end)
+		return 0;
+	else
+		return (void*) p;
+}
+
+/* memmem copy-pasted from Android Bionic
+ * https://android.googlesource.com/platform/bionic/+/ics-mr0/libc/string/memmem.c
+ */
+void *memmem(const void *hay, size_t haySz, const void *needle, size_t needleSz)
+{
+	size_t n = haySz;
+	size_t m = needleSz;
+	if (m > n || !m || !n)
+		return 0;
+	if (m > 1) {
+		const unsigned char *y = (const unsigned char*) hay;
+		const unsigned char *x = (const unsigned char*) needle;
+		size_t j = 0;
+		size_t k = 1, l = 2;
+		if (x[0] == x[1]) {
+			k = 2;
+			l = 1;
+		}
+		while (j <= n-m) {
+			if (x[1] != y[j+1]) {
+				j += k;
+			} else {
+				if (!memcmp(x+2, y+j+2, m-2) && x[0] == y[j])
+					return (void*) &y[j];
+				j += l;
+			}
+		}
+	} else {
+		/* degenerate case */
+		return memchr(hay, ((unsigned char*)needle)[0], n);
+	}
+	return 0;
+}
+
+/* find a string within a memory block */
+void *memstr(const void *hay, size_t haySz, const char *needle)
+{
+	if (!needle)
+		return 0;
+	
+	return memmem(hay, haySz, needle, strlen(needle));
+}
+
 /* duplicate a memory block */
 void *memdup(const void *mem, size_t sz)
 {
@@ -14,6 +80,23 @@ void *memdup(const void *mem, size_t sz)
 	
 	if (!(result = malloc(sz)))
 		return 0;
+	
+	return memcpy(result, mem, sz);
+}
+
+/* duplicate a memory block with padding appended */
+void *memduppad(const void *mem, size_t sz, size_t padbytes)
+{
+	void *result;
+	
+	if (!mem || !sz)
+		return 0;
+	
+	if (!(result = malloc(sz + padbytes)))
+		return 0;
+	
+	if (padbytes)
+		memset(((unsigned char *)result) + sz, 0, padbytes);
 	
 	return memcpy(result, mem, sz);
 }
