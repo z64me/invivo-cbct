@@ -1,6 +1,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <assert.h>
+#include <stdint.h>
+#include <jasper/jasper.h>
 
 #include "common.h"
 
@@ -12,7 +15,241 @@ struct inv
 	/* xml vars */
 	void *AppendedData;
 	size_t AppendedDataSz;
+	
+	/* AppendedData contents */
+	void *gray; // 16-bit grayscale image strip
+	size_t graySz; // size of gray memory block
+	unsigned grayNum; // number of images in strip
+	unsigned grayJPC; // number of JPC containers
+	int grayWidth; // dimensions of grayscale images
+	int grayHeight;
 };
+
+static void jasper_cleanup(void)
+{
+	jas_cleanup_thread();
+	jas_cleanup_library();
+}
+
+static int jasper_begin(void)
+{
+	static jas_std_allocator_t allocator;
+	
+	jas_conf_clear();
+	jas_std_allocator_init(&allocator);
+	jas_conf_set_allocator(&allocator.base);
+	jas_conf_set_max_mem_usage(1024 * 1024 * 1024 * 1); // 1 GiB
+	
+	if (jas_init_library())
+	{
+		fprintf(stderr, "jas_init_library error\n");
+		return 1;
+	}
+	if (jas_init_thread())
+	{
+		fprintf(stderr, "jas_init_thread error\n");
+		return 1;
+	}
+	
+	/* success */
+	return 0;
+}
+
+static inline int AppendedData_parse(struct inv *inv)
+{
+	const uint8_t magic[] = { 0xff, 0x4f, 0xff, 0x51 }; // JPC start
+	uint8_t *data;
+	uint8_t *dataStart;
+	uint8_t *dataEnd;
+	uint8_t *gray;
+	size_t dataSz = inv->AppendedDataSz;
+	unsigned int i;
+	
+	assert(inv);
+	assert(inv->AppendedData);
+	assert(inv->AppendedDataSz);
+	
+	dataStart = inv->AppendedData;
+	dataEnd = dataStart + inv->AppendedDataSz;
+	
+	/* number of JPC containers */
+	inv->grayJPC = LEu32(dataStart + 4);
+	
+	/* what I have deduced about the header so far:
+	 * struct inv_header
+	 * {
+	 *    uint32_t magic;     // 0x2020205F aka string "   _" (magic value?)
+	 *    uint32_t num;       // (LE) number of JPC containers
+	 *    uint32_t cmpnum;    // (LE) number of components per container?
+	 *    uint32_t unk0;      // unknown
+	 *    uint32_t unk1[num]; // array of 32-bit values, one for each container
+	 * };
+	 * the remainder of the file is a series of JPEG 2000
+	 * codestreams (JPC specifically) sandwiched together
+	 */
+	
+	/* first pass: assert that all dimensions match */
+	for (i = 0, data = dataStart;;)
+	{
+		int width;
+		int height;
+		
+		/* get start of next JPC */
+		++data;
+		data = memmem(data, dataSz - (data - dataStart), magic, sizeof(magic));
+		if (!data)
+			break;
+		
+		/* number of JPC containers encountered */
+		++i;
+		
+		/* extract width */
+		width = BEu32(data + 8);
+		height = BEu32(data + 12);
+		
+		/* first JPC sets width */
+		if (!inv->grayWidth)
+		{
+			inv->grayWidth = width;
+			inv->grayHeight = height;
+			continue;
+		}
+		
+		/* images within all JPC containers expected to be the same dimensions */
+		if (inv->grayWidth != width || inv->grayHeight != height)
+		{
+			fprintf(stderr, "JPC image dimensions mismatch: "
+				"expected %dx%d, got %dx%d\n"
+				, inv->grayWidth, inv->grayHeight, width, height
+			);
+			return 1;
+		}
+	}
+	
+	/* detected a different number of containers than the header suggests */
+	if (i != inv->grayJPC)
+	{
+		fprintf(stderr, "expected %d JPC containers, found %d\n", inv->grayJPC, i);
+		return 1;
+	}
+	
+	/* allocate memory for 16-bit image data for each image (7 components per JPC) */
+	inv->graySz = 2 * inv->grayWidth * inv->grayHeight * inv->grayJPC * 7;
+	inv->gray = calloc(1, inv->graySz);
+	if (!inv->gray)
+	{
+		fprintf(stderr, "memory error\n");
+		return 1;
+	}
+	
+	/* initialize libjasper */
+	if (jasper_begin())
+	{
+		fprintf(stderr, "libjasper error\n");
+		return 1;
+	}
+	
+	/* second pass: parse all the JPC containers using libjasper */
+	for (inv->grayNum = 0, gray = inv->gray, data = dataStart;;)
+	{
+		jas_image_t *image;
+		jas_stream_t *stream;
+		int fmt;
+		
+		/* get start of next JPC */
+		++data;
+		data = memmem(data, dataSz - (data - dataStart), magic, sizeof(magic));
+		if (!data)
+			break;
+		
+		/* open stream */
+		stream = jas_stream_memopen((void*)data, dataSz - (data - dataStart));
+		if (!stream)
+		{
+			fprintf(stderr, "jas_stream_memopen error\n");
+			return 1;
+		}
+		
+		/* get image format */
+		if ((fmt = jas_image_getfmt(stream)) < 0)
+		{
+			fprintf(stderr, "jas_image_getfmt error\n");
+			return -1;
+		}
+		
+		/* decode stream to image */
+		if (!(image = jas_image_decode(stream, fmt, 0)))
+		{
+			fprintf(stderr, "jas_image_decode error\n");
+			return -1;
+		}
+		
+		/* get 16-bit grayscale pixel data for each component */
+		for (i = 0; i < jas_image_numcmpts(image); ++i, inv->grayNum++)
+		{
+			int width = jas_image_width(image);
+			int height = jas_image_height(image);
+			int x;
+			int y;
+			
+			for (y = 0; y < height; ++y)
+			{
+				for (x = 0; x < width; ++x)
+				{
+					uint16_t v = jas_image_readcmptsample(image, i, x, y);
+					
+					v -= 0x8000;
+					
+					*gray = v; gray++;
+					*gray = v >> 8; gray++;
+				}
+			}
+			
+			/* exhausted the allocated pixel buffer */
+			if (gray > ((uint8_t*)inv->gray) + inv->graySz)
+			{
+				fprintf(stderr, "error: more images than expected\n");
+				return 1;
+			}
+		}
+		
+		/* cleanup */
+		jas_stream_close(stream);
+		jas_image_destroy(image);
+		
+		fprintf(stderr, "%p\n", data);
+	}
+	
+	/* test: write raw image sequence that can be loaded in ImageJ
+	 * ImageJ available here: https://imagej.nih.gov/ij/index.html
+	 * File -> Import -> Raw
+	 * Then select the following options:
+	 *  - Image type: 16-bit Unsigned
+	 *  - Width: 536 pixels
+	 *  - Height: 536 pixels
+	 *  - Offset to first image: 0 bytes
+	 *  - Number of images: 440
+	 *  - Gap between images: 0 bytes
+	 *  - Little-endian byte-order
+	 * (Leave all other settings off.)
+	 * (The dimensions assume you're using my dental CBCT.)
+	 */
+	{
+		FILE *test = fopen("bin/test.bin", "wb");
+		// write entire image sequence:
+		fwrite(inv->gray, 1, inv->graySz, test);
+		// write only first frame of 10th JPC in file (the dimensions assume my dental CBCT):
+		//fwrite(((uint8_t*)inv->gray) + 10 * 7 * 536 * 536 * 2, 1, 536 * 536 * 2, test);
+		fclose(test);
+		fprintf(stderr, "wrote %d images\n", inv->grayNum);
+	}
+	
+	/* cleanup libjasper */
+	jasper_cleanup();
+	
+	/* success */
+	return 0;
+}
 
 void inv_free(struct inv *inv)
 {
@@ -24,6 +261,9 @@ void inv_free(struct inv *inv)
 	
 	if (inv->AppendedData)
 		free(inv->AppendedData);
+	
+	if (inv->gray)
+		free(inv->gray);
 	
 	free(inv);
 }
@@ -81,6 +321,9 @@ struct inv *inv_parse(const void *src, size_t srcSz)
 		/* copy */
 		inv->AppendedData = memdup(start, sz);
 		inv->AppendedDataSz = sz;
+		
+		/* parse */
+		AppendedData_parse(inv);
 		
 		/* strip */
 		memmove(start, end, strlen(end) + 1);

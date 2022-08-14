@@ -1,8 +1,29 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <assert.h>
 
 #include "common.h"
+
+/* read little-endian encoded u32 */
+uint32_t LEu32(const void *ptr)
+{
+	const uint8_t *b = ptr;
+	
+	assert(b);
+	
+	return (b[3] << 24) | (b[2] << 16) | (b[1] << 8) | (b[0]);
+}
+
+/* read big-endian encoded u32 */
+uint32_t BEu32(const void *ptr)
+{
+	const uint8_t *b = ptr;
+	
+	assert(b);
+	
+	return (b[0] << 24) | (b[1] << 16) | (b[2] << 8) | (b[3]);
+}
 
 /* memchr copy-pasted from Android Bionic
  * https://android.googlesource.com/platform/bionic/+/ics-mr0/libc/string/memchr.c
