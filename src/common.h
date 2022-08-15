@@ -4,6 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+int savefile(const char *fn, const void *dat, const size_t sz);
 void *loadfile(const char *fn, size_t *sz);
 void *memdup(const void *mem, size_t sz);
 void *memduppad(const void *mem, size_t sz, size_t padbytes);

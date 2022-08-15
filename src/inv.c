@@ -60,7 +60,6 @@ static inline int AppendedData_parse(struct inv *inv)
 	const uint8_t magic[] = { 0xff, 0x4f, 0xff, 0x51 }; // JPC start
 	uint8_t *data;
 	uint8_t *dataStart;
-	uint8_t *dataEnd;
 	uint8_t *gray;
 	size_t dataSz = inv->AppendedDataSz;
 	unsigned int i;
@@ -70,7 +69,6 @@ static inline int AppendedData_parse(struct inv *inv)
 	assert(inv->AppendedDataSz);
 	
 	dataStart = inv->AppendedData;
-	dataEnd = dataStart + inv->AppendedDataSz;
 	
 	/* number of JPC containers */
 	inv->grayJPC = LEu32(dataStart + 4);
@@ -217,31 +215,7 @@ static inline int AppendedData_parse(struct inv *inv)
 		jas_stream_close(stream);
 		jas_image_destroy(image);
 		
-		fprintf(stderr, "%p\n", data);
-	}
-	
-	/* test: write raw image sequence that can be loaded in ImageJ
-	 * ImageJ available here: https://imagej.nih.gov/ij/index.html
-	 * File -> Import -> Raw
-	 * Then select the following options:
-	 *  - Image type: 16-bit Unsigned
-	 *  - Width: 536 pixels
-	 *  - Height: 536 pixels
-	 *  - Offset to first image: 0 bytes
-	 *  - Number of images: 440
-	 *  - Gap between images: 0 bytes
-	 *  - Little-endian byte-order
-	 * (Leave all other settings off.)
-	 * (The dimensions assume you're using my dental CBCT.)
-	 */
-	{
-		FILE *test = fopen("bin/test.bin", "wb");
-		// write entire image sequence:
-		fwrite(inv->gray, 1, inv->graySz, test);
-		// write only first frame of 10th JPC in file (the dimensions assume my dental CBCT):
-		//fwrite(((uint8_t*)inv->gray) + 10 * 7 * 536 * 536 * 2, 1, 536 * 536 * 2, test);
-		fclose(test);
-		fprintf(stderr, "wrote %d images\n", inv->grayNum);
+		fprintf(stdout, "%p\n", data);
 	}
 	
 	/* cleanup libjasper */
@@ -360,4 +334,74 @@ struct inv *inv_load(const char *fn)
 	free(data);
 	
 	return inv;
+}
+
+/* write raw image sequence that can be loaded in ImageJ
+ * ImageJ available here: https://imagej.nih.gov/ij/index.html
+ * File -> Import -> Raw
+ * Then select the following options:
+ *  - Image type: 16-bit Unsigned
+ *  - Width: 536 pixels
+ *  - Height: 536 pixels
+ *  - Offset to first image: 0 bytes
+ *  - Number of images: 440
+ *  - Gap between images: 0 bytes
+ *  - Little-endian byte-order
+ * (Leave all other settings off.)
+ * (The dimensions assume you're using my dental CBCT.)
+ */
+int inv_dump(struct inv *inv, const char *fn)
+{
+	assert(inv);
+	assert(fn);
+	
+	if (savefile(fn, inv->gray, inv->graySz))
+		return 1;
+	
+	fprintf(stdout, "wrote %d images\n", inv->grayNum);
+	
+	/*{
+		FILE *test = fopen(fn, "wb");
+		// write entire image sequence:
+		fwrite(inv->gray, 1, inv->graySz, test);
+		// write only first frame of 10th JPC in file (the dimensions assume my dental CBCT):
+		//fwrite(((uint8_t*)inv->gray) + 10 * 7 * 536 * 536 * 2, 1, 536 * 536 * 2, test);
+		fclose(test);
+	}*/
+	
+	/* success */
+	return 0;
+}
+
+struct inv *inv_load_binary(const char *fn, int w, int h)
+{
+	struct inv *inv;
+	
+	if (!(inv = calloc(1, sizeof(*inv))))
+		goto L_fail;
+	
+	/* load binary file */
+	if (!(inv->gray = loadfile(fn, &inv->graySz)))
+	{
+		fprintf(stderr, "failed to load binary file '%s'\n", fn);
+		goto L_fail;
+	}
+	
+	/* dimensions and more */
+	inv->grayNum = inv->graySz / (w * h * 2);
+	inv->grayWidth = w;
+	inv->grayHeight = h;
+	
+	/* sanity check */
+	if (w * h * inv->grayNum * 2 != inv->graySz)
+	{
+		fprintf(stderr, "binary file '%s' sanity check\n", fn);
+		goto L_fail;
+	}
+	
+	return inv;
+	
+L_fail:
+	inv_free(inv);
+	return 0;
 }

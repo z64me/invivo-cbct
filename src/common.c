@@ -147,3 +147,25 @@ void *loadfile(const char *fn, size_t *sz)
 	
 	return dat;
 }
+
+/* minimal file writer
+ * returns 0 on failure
+ * returns non-zero on success
+ */
+int savefile(const char *fn, const void *dat, const size_t sz)
+{
+	FILE *fp;
+	
+	/* rudimentary error checking returns 0 on any error */
+	if (
+		!fn
+		|| !sz
+		|| !dat
+		|| !(fp = fopen(fn, "wb"))
+		|| fwrite(dat, 1, sz, fp) != sz
+		|| fclose(fp)
+	)
+		return 0;
+	
+	return 1;
+}
