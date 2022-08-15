@@ -3,6 +3,7 @@
 
 struct inv;
 
+const void *inv_get_gray(struct inv *inv, int *w, int *h, int *num);
 int inv_dump(struct inv *inv, const char *fn);
 struct inv *inv_parse(const void *src, size_t srcSz);
 struct inv *inv_load(const char *fn);

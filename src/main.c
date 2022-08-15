@@ -1,10 +1,13 @@
 #include <stdio.h>
 #include <string.h>
+#include <stdint.h>
 #include <stdbool.h>
 #include "inv.h"
+#include "viewer.h"
 
 int main(int argc, char *argv[])
 {
+	struct viewer *viewer = 0;
 	const char *progname = argv[0];
 	const char *fn = argv[argc - 1];
 	const char *dump = 0;
@@ -79,6 +82,34 @@ int main(int argc, char *argv[])
 	/* dump inv file */
 	if (dump && inv_dump(inv, dump))
 		return -1;
+	
+	/* viewer */
+	{
+		const uint8_t *gray;
+		int w;
+		int h;
+		int num;
+		
+		gray = inv_get_gray(inv, &w, &h, &num);
+		
+		if (!(viewer = viewer_create()))
+			return -1;
+		for (;;)
+		{
+			static int frame = 0;
+			
+			if (viewer_events(viewer))
+				break;
+			
+			viewer_upload_pixels(viewer, gray + w * h * frame * 2, w, h);
+			
+			viewer_draw(viewer);
+			
+			frame += 1;
+			frame %= num;
+		}
+		viewer_destroy(viewer);
+	}
 	
 	/* cleanup */
 	inv_free(inv);

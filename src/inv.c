@@ -405,3 +405,17 @@ L_fail:
 	inv_free(inv);
 	return 0;
 }
+
+const void *inv_get_gray(struct inv *inv, int *w, int *h, int *num)
+{
+	assert(inv);
+	assert(w);
+	assert(h);
+	assert(num);
+	
+	*w = inv->grayWidth;
+	*h = inv->grayHeight;
+	*num = inv->grayNum;
+	
+	return inv->gray;
+}
