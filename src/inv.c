@@ -355,8 +355,11 @@ int inv_dump(struct inv *inv, const char *fn)
 	assert(inv);
 	assert(fn);
 	
-	if (savefile(fn, inv->gray, inv->graySz))
+	if (!savefile(fn, inv->gray, inv->graySz))
+	{
+		fprintf(stderr, "error writing file '%s'\n", fn);
 		return 1;
+	}
 	
 	fprintf(stdout, "wrote %d images\n", inv->grayNum);
 	
