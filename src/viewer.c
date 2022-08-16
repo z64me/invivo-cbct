@@ -14,6 +14,12 @@ struct viewer
 	SDL_Texture *buf;
 };
 
+// XXX placeholder
+// TODO why are these specific values required to match ImageJ's output?
+static float contrast = 17.500031;
+static float brightness = -0.23;
+static float sensitivity = 0.01;
+
 struct viewer *viewer_create(void)
 {
 	struct viewer *v;
@@ -33,9 +39,9 @@ struct viewer *viewer_create(void)
 		return 0;
 	
 	v->renderer = SDL_CreateRenderer(
-		v->window,
-		-1,
-		SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC
+		v->window
+		, -1
+		, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC
 	);
 	
 	if (!v->renderer)
@@ -50,6 +56,18 @@ struct viewer *viewer_create(void)
 	);
 	
 	return v;
+}
+
+static void dobright(float signum)
+{
+	brightness += sensitivity * signum;
+	printf("brightness = %f\n", brightness);
+}
+
+static void docont(float signum)
+{
+	contrast += sensitivity * signum * 10;
+	printf("contrast = %f\n", contrast);
 }
 
 int viewer_events(struct viewer *v)
@@ -71,6 +89,12 @@ int viewer_events(struct viewer *v)
 					case SDLK_ESCAPE:
 						rval = 1;
 						break;
+					
+					// XXX placeholder
+					case SDLK_UP: dobright(1); break;
+					case SDLK_DOWN: dobright(-1); break;
+					case SDLK_LEFT: docont(-1); break;
+					case SDLK_RIGHT: docont(1); break;
 				}
 				break;
 		}
@@ -96,11 +120,23 @@ void viewer_upload_pixels(struct viewer *v, const void *src, int srcW, int srcH)
 	for (i = 0; i < srcW * srcH; ++i, src8 += 2, dst8 += 4)
 	{
 		uint16_t v = ((src8[1] << 8) | (src8[0]));
-		float conv = v * (1.0f / 65535.0f) * 255;
+		float conv = v * (1.0f / 65535.0f);
 		
-		// TODO brightness and contrast
+		/* simple brightness and contrast
+		 * https://www.gegl.org/brightness-contrast.c.html
+		 */
+		conv -= 0.5f;
+		conv *= contrast;
+		conv += brightness;
+		conv += 0.5f;
+		if (conv < 0)
+			conv = 0;
+		if (conv > 1)
+			conv = 1;
 		
-		dst8[0] = 0xff;
+		/* final 8-bit grayscale shade */
+		conv *= 255;
+		dst8[0] = 0xff; // opacity
 		dst8[1] = conv;
 		dst8[2] = conv;
 		dst8[3] = conv;

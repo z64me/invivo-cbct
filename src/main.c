@@ -97,6 +97,7 @@ int main(int argc, char *argv[])
 		for (;;)
 		{
 			static int frame = 0;
+			//frame = num / 2 - 1;
 			
 			if (viewer_events(viewer))
 				break;
