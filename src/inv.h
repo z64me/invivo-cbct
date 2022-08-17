@@ -8,6 +8,7 @@ enum inv_plane
 	INV_PLANE_AXIAL = 0   // bottom to top
 	, INV_PLANE_SAGITTAL  // right to left
 	, INV_PLANE_CORONAL   // front to back
+	, INV_PLANE_NUM       // num planes in this enum
 };
 
 int inv_get_width(struct inv *inv);

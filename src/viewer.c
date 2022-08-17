@@ -6,12 +6,15 @@
 #define WINDOW_NAME "Invivo CBCT Viewer"
 #define IM_W 536 // TODO make dimensions not hard-coded
 #define IM_H 536
+#define VP_W 256 // a single viewport
+#define VP_H 256
+#define BUF_NUM  3
 
 struct viewer
 {
 	SDL_Window *window;
 	SDL_Renderer *renderer;
-	SDL_Texture *buf;
+	SDL_Texture *buf[BUF_NUM];
 };
 
 // XXX placeholder
@@ -23,15 +26,19 @@ static float sensitivity = 0.01;
 struct viewer *viewer_create(void)
 {
 	struct viewer *v;
+	int i;
 	
 	v = calloc(1, sizeof(*v));
+	
+	// linear filtering = smooth scaling
+	SDL_SetHint("SDL_HINT_RENDER_SCALE_QUALITY", "1");
 	
 	v->window = SDL_CreateWindow(
 		WINDOW_NAME
 		, SDL_WINDOWPOS_UNDEFINED
 		, SDL_WINDOWPOS_UNDEFINED
-		, IM_W
-		, IM_H
+		, VP_W * 2 // window houses 2x2 viewports
+		, VP_H * 2
 		, SDL_WINDOW_SHOWN
 	);
 	
@@ -47,13 +54,14 @@ struct viewer *viewer_create(void)
 	if (!v->renderer)
 		return 0;
 	
-	v->buf = SDL_CreateTexture(
-		v->renderer
-		, SDL_PIXELFORMAT_RGBA8888
-		, SDL_TEXTUREACCESS_STREAMING
-		, IM_W
-		, IM_H
-	);
+	for (i = 0; i < BUF_NUM; ++i)
+		v->buf[i] = SDL_CreateTexture(
+			v->renderer
+			, SDL_PIXELFORMAT_RGBA8888
+			, SDL_TEXTUREACCESS_STREAMING
+			, IM_W
+			, IM_H
+		);
 	
 	return v;
 }
@@ -104,7 +112,7 @@ int viewer_events(struct viewer *v)
 	(void)v;
 }
 
-void viewer_upload_pixels(struct viewer *v, const void *src, int srcW, int srcH)
+void viewer_upload_pixels(struct viewer *v, const void *src, int srcW, int srcH, int idx)
 {
 	const uint8_t *src8 = src;
 	uint8_t *dst8;
@@ -112,7 +120,7 @@ void viewer_upload_pixels(struct viewer *v, const void *src, int srcW, int srcH)
 	int pitch;
 	int i;
 	
-	SDL_Texture *tex = v->buf;
+	SDL_Texture *tex = v->buf[idx];
 	
 	SDL_LockTexture(tex, 0, &dst, &pitch);
 	
@@ -150,7 +158,9 @@ int viewer_draw(struct viewer *v)
 	SDL_Renderer *ren = v->renderer;
 	
 	SDL_RenderClear(ren);
-	SDL_RenderCopy(ren, v->buf, 0, 0);
+	SDL_RenderCopy(ren, v->buf[0], 0, &(SDL_Rect){0, 0, VP_W, VP_H});
+	SDL_RenderCopy(ren, v->buf[1], 0, &(SDL_Rect){VP_W, 0, VP_W, VP_H});
+	SDL_RenderCopy(ren, v->buf[2], 0, &(SDL_Rect){0, VP_H, VP_W, VP_H});
 	SDL_RenderPresent(ren);
 	
 	return 0;
@@ -158,7 +168,10 @@ int viewer_draw(struct viewer *v)
 
 int viewer_destroy(struct viewer *v)
 {
-	SDL_DestroyTexture(v->buf);
+	int i;
+	
+	for (i = 0; i < BUF_NUM; ++i)
+		SDL_DestroyTexture(v->buf[i]);
 	SDL_DestroyRenderer(v->renderer);
 	SDL_DestroyWindow(v->window);	
 	free(v);

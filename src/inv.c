@@ -290,6 +290,9 @@ const void *inv_get_plane(struct inv *inv, void *dst, unsigned image, enum inv_p
 				}
 			}
 			break;
+		
+		case INV_PLANE_NUM:
+			break;
 	}
 	
 	return dst;

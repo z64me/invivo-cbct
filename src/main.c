@@ -96,13 +96,17 @@ int main(int argc, char *argv[])
 		for (;;)
 		{
 			static float frame = 0;
+			int i;
 			//frame = num / 2 - 1;
 			
 			if (viewer_events(viewer))
 				break;
 			
-			inv_get_plane(inv, pix, frame, INV_PLANE_SAGITTAL);
-			viewer_upload_pixels(viewer, pix, w, h);
+			for (i = 0; i < INV_PLANE_NUM; ++i)
+			{
+				inv_get_plane(inv, pix, frame, i);
+				viewer_upload_pixels(viewer, pix, w, h, i);
+			}
 			
 			viewer_draw(viewer);
 			
