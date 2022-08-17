@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <jasper/jasper.h>
 
+#include "inv.h"
 #include "common.h"
 
 struct inv
@@ -223,6 +224,75 @@ static inline int AppendedData_parse(struct inv *inv)
 	
 	/* success */
 	return 0;
+}
+
+int inv_get_num_images(struct inv *inv)
+{
+	return inv->grayNum;
+}
+
+int inv_get_width(struct inv *inv)
+{
+	return inv->grayWidth;
+}
+
+int inv_get_height(struct inv *inv)
+{
+	return inv->grayHeight;
+}
+
+const void *inv_get_frame(struct inv *inv, unsigned image)
+{
+	assert(inv);
+	assert(image < inv->grayNum);
+	
+	return ((uint16_t*)inv->gray) + inv->grayWidth * inv->grayHeight * image;
+}
+
+static const uint16_t *GetFrame16(struct inv *inv, unsigned image)
+{
+	return inv_get_frame(inv, image);
+}
+
+const void *inv_get_plane(struct inv *inv, void *dst, unsigned image, enum inv_plane plane)
+{
+	const uint16_t *gray = inv->gray;
+	uint16_t *dstv = dst;
+	int w = inv->grayWidth;
+	int h = inv->grayHeight;
+	int x;
+	int y;
+	assert(image < inv->grayNum);
+	
+	switch (plane)
+	{
+		case INV_PLANE_AXIAL:
+			memcpy(dst, inv_get_frame(inv, image), w * h * sizeof(*gray));
+			break;
+		
+		case INV_PLANE_SAGITTAL:
+			dstv += w * h - 1;
+			for (y = 0; y < h; ++y)
+			{
+				for (x = 0; x < w; ++x, --dstv)
+				{
+					*dstv = GetFrame16(inv, y % inv->grayNum)[x * w + image];
+				}
+			}
+			break;
+		
+		case INV_PLANE_CORONAL:
+			for (y = 0; y < h; ++y)
+			{
+				for (x = 0; x < w; ++x, ++dstv)
+				{
+					*dstv = GetFrame16(inv, (h - y) % inv->grayNum)[image * w + x];
+				}
+			}
+			break;
+	}
+	
+	return dst;
 }
 
 void inv_free(struct inv *inv)

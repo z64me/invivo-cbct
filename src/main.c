@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <stdbool.h>
 #include "inv.h"
 #include "viewer.h"
@@ -85,31 +86,40 @@ int main(int argc, char *argv[])
 	
 	/* viewer */
 	{
-		const uint8_t *gray;
-		int w;
-		int h;
-		int num;
-		
-		gray = inv_get_gray(inv, &w, &h, &num);
+		int num = inv_get_num_images(inv);
+		int w = inv_get_width(inv);
+		int h = inv_get_height(inv);
+		uint16_t *pix = malloc(w * h * sizeof(*pix));
 		
 		if (!(viewer = viewer_create()))
 			return -1;
 		for (;;)
 		{
-			static int frame = 0;
+			static float frame = 0;
 			//frame = num / 2 - 1;
 			
 			if (viewer_events(viewer))
 				break;
 			
-			viewer_upload_pixels(viewer, gray + w * h * frame * 2, w, h);
+			inv_get_plane(inv, pix, frame, INV_PLANE_SAGITTAL);
+			viewer_upload_pixels(viewer, pix, w, h);
 			
 			viewer_draw(viewer);
 			
 			frame += 1;
-			frame %= num;
+			if (frame >= num)
+				frame = 0;
 		}
 		viewer_destroy(viewer);
+	#if 0 /* valgrind test */
+		for (int frame = 0; frame < num; ++frame)
+			inv_get_plane(inv, pix, frame, INV_PLANE_AXIAL);
+		for (int frame = 0; frame < num; ++frame)
+			inv_get_plane(inv, pix, frame, INV_PLANE_SAGITTAL);
+		for (int frame = 0; frame < num; ++frame)
+			inv_get_plane(inv, pix, frame, INV_PLANE_CORONAL);
+	#endif
+		free(pix);
 	}
 	
 	/* cleanup */
