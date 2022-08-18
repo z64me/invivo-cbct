@@ -254,41 +254,44 @@ static const uint16_t *GetFrame16(struct inv *inv, unsigned image)
 	return inv_get_frame(inv, image);
 }
 
-const void *inv_get_plane(struct inv *inv, void *dst, unsigned image, enum inv_plane plane)
+const void *inv_get_plane(struct inv *inv, void *dst, int image, enum inv_plane plane)
 {
 	const uint16_t *gray = inv->gray;
 	uint16_t *dstv = dst;
 	int w = inv->grayWidth;
 	int h = inv->grayHeight;
+	int z = inv->grayNum;
 	int x;
 	int y;
+	
+	assert(image >= 0);
+	
+	memset(dst, 0, w * h * sizeof(*gray));
 	
 	switch (plane)
 	{
 		case INV_PLANE_AXIAL:
-			if (image >= inv->grayNum)
-				memset(dst, 0, w * h * sizeof(*gray));
-			else
+			if (image < z)
 				memcpy(dst, inv_get_frame(inv, image), w * h * sizeof(*gray));
 			break;
 		
 		case INV_PLANE_SAGITTAL:
 			dstv += w * h - 1;
-			for (y = 0; y < h; ++y)
+			for (y = 0; y < z; ++y)
 			{
 				for (x = 0; x < w; ++x, --dstv)
 				{
-					*dstv = GetFrame16(inv, y % inv->grayNum)[x * w + image];
+					*dstv = GetFrame16(inv, y)[x * w + image];
 				}
 			}
 			break;
 		
 		case INV_PLANE_CORONAL:
-			for (y = 0; y < h; ++y)
+			for (y = 0; y < z; ++y)
 			{
 				for (x = 0; x < w; ++x, ++dstv)
 				{
-					*dstv = GetFrame16(inv, (h - y) % inv->grayNum)[image * w + x];
+					*dstv = GetFrame16(inv, z - y - 1)[image * w + x];
 				}
 			}
 			break;
