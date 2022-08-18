@@ -105,6 +105,7 @@ int main(int argc, char *argv[])
 			for (i = 0; i < INV_PLANE_NUM; ++i)
 			{
 				inv_get_plane(inv, pix, frame, i);
+				inv_make_8bit(pix, w, h);
 				viewer_upload_pixels(viewer, pix, w, h, i);
 			}
 			

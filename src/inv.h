@@ -11,6 +11,7 @@ enum inv_plane
 	, INV_PLANE_NUM       // num planes in this enum
 };
 
+void *inv_make_8bit(void *pixels16bit, int w, int h);
 int inv_get_width(struct inv *inv);
 int inv_get_height(struct inv *inv);
 int inv_get_num_images(struct inv *inv);

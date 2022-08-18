@@ -487,6 +487,41 @@ L_fail:
 	return 0;
 }
 
+/* convert 16-bit pixel data to color-corrected 8-bit pixel data */
+void *inv_make_8bit(void *pixels16bit, int w, int h)
+{
+	uint8_t *src = pixels16bit;
+	uint8_t *dst = pixels16bit;
+	// TODO why are these specific values required to match ImageJ's output?
+	float brightness = -0.23;
+	float contrast = 17.500031;
+	int i;
+	
+	for (i = 0; i < w * h; ++i, src += 2, dst += 1)
+	{
+		uint16_t v = ((src[1] << 8) | (src[0]));
+		float conv = v * (1.0f / 65535.0f);
+		
+		/* simple brightness and contrast
+		 * https://www.gegl.org/brightness-contrast.c.html
+		 */
+		conv -= 0.5f;
+		conv *= contrast;
+		conv += brightness;
+		conv += 0.5f;
+		if (conv < 0)
+			conv = 0;
+		if (conv > 1)
+			conv = 1;
+		
+		/* final 8-bit grayscale shade */
+		conv *= 255;
+		*dst = conv;
+	}
+	
+	return pixels16bit;
+}
+
 const void *inv_get_gray(struct inv *inv, int *w, int *h, int *num)
 {
 	assert(inv);
