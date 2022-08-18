@@ -262,12 +262,14 @@ const void *inv_get_plane(struct inv *inv, void *dst, unsigned image, enum inv_p
 	int h = inv->grayHeight;
 	int x;
 	int y;
-	assert(image < inv->grayNum);
 	
 	switch (plane)
 	{
 		case INV_PLANE_AXIAL:
-			memcpy(dst, inv_get_frame(inv, image), w * h * sizeof(*gray));
+			if (image >= inv->grayNum)
+				memset(dst, 0, w * h * sizeof(*gray));
+			else
+				memcpy(dst, inv_get_frame(inv, image), w * h * sizeof(*gray));
 			break;
 		
 		case INV_PLANE_SAGITTAL:

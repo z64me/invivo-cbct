@@ -111,16 +111,16 @@ int main(int argc, char *argv[])
 			viewer_draw(viewer);
 			
 			frame += 1;
-			if (frame >= num)
+			if (frame >= w)
 				frame = 0;
 		}
 		viewer_destroy(viewer);
 	#if 0 /* valgrind test */
-		for (int frame = 0; frame < num; ++frame)
+		for (int frame = 0; frame < w; ++frame)
 			inv_get_plane(inv, pix, frame, INV_PLANE_AXIAL);
-		for (int frame = 0; frame < num; ++frame)
+		for (int frame = 0; frame < w; ++frame)
 			inv_get_plane(inv, pix, frame, INV_PLANE_SAGITTAL);
-		for (int frame = 0; frame < num; ++frame)
+		for (int frame = 0; frame < w; ++frame)
 			inv_get_plane(inv, pix, frame, INV_PLANE_CORONAL);
 	#endif
 		free(pix);
