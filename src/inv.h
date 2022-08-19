@@ -18,6 +18,7 @@ int inv_get_num_images(struct inv *inv);
 const void *inv_get_plane(struct inv *inv, void *dst, int image, enum inv_plane plane);
 const void *inv_get_gray(struct inv *inv, int *w, int *h, int *num);
 int inv_dump(struct inv *inv, const char *fn);
+int inv_dump_pointcloud(struct inv *inv, const char *fn, int minv, int maxv, float density);
 struct inv *inv_parse(const void *src, size_t srcSz);
 struct inv *inv_load(const char *fn);
 struct inv *inv_load_binary(const char *fn, int w, int h);

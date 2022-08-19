@@ -3,6 +3,7 @@
 #include <string.h>
 #include <assert.h>
 #include <stdint.h>
+#include <math.h>
 #include <jasper/jasper.h>
 
 #include "inv.h"
@@ -520,6 +521,128 @@ void *inv_make_8bit(void *pixels16bit, int w, int h)
 	}
 	
 	return pixels16bit;
+}
+
+/* dump inv to point cloud (Stanford .ply) */
+int inv_dump_pointcloud(struct inv *inv, const char *fn, int minv, int maxv, float density)
+{
+	FILE *fp;
+	uint16_t *pix16;
+	uint8_t *pix8;
+	int digits = 32;
+	int numv = 0;
+	int loops;
+	float x;
+	float y;
+	float z;
+	int w;
+	int h;
+	int d;
+	
+	assert(inv);
+	assert(fn);
+	assert(density > 0 && density <= 1);
+	assert(minv >= 0 && minv <= 255);
+	assert(maxv >= 0 && maxv <= 255);
+	assert(inv->gray);
+	assert(inv->grayWidth);
+	assert(inv->grayHeight);
+	assert(inv->grayNum);
+	
+	/* 3D dimensions of full image stack (width, height, depth) */
+	w = inv->grayWidth;
+	h = inv->grayHeight;
+	d = inv->grayNum;
+	
+	/* when density == 1.00, advance 1 pixel at a time;
+	 * when density == 0.25, advance 4 pixels at a time; etc
+	 * etc
+	 */
+	density = 1.0 / density;
+	
+	/* temporary 16-bit pixel buffer */
+	pix16 = malloc(w * h * sizeof(*pix16));
+	if (!pix16)
+	{
+		fprintf(stderr, "memory error\n");
+		return -1;
+	}
+	
+	/* output file */
+	fp = fopen(fn, "wb+");
+	if (!fp)
+	{
+		fprintf(stderr, "failed to open '%s' for writing\n", fn);
+		return -1;
+	}
+	
+	/* this loop works like so:
+	 *  - write header
+	 *  - write vertex data
+	 *  - overwrite header with information gathered while writing the
+	 *    vertex data (specifically, the number of vertices within)
+	 *  - exit loop
+	 */
+	for (loops = 0; ; ++loops)
+	{
+		/* write header
+		 * (overwrites header on second pass)
+		 */
+		fprintf(fp,
+			"ply\n"
+			"format ascii 1.0\n"
+			"element vertex %*d\n"
+			"property float x\n"
+			"property float y\n"
+			"property float z\n"
+			"property uchar red\n"
+			"property uchar green\n"
+			"property uchar blue\n"
+			"property uchar alpha\n"
+			"element face 0\n"
+			"property list uchar uint vertex_indices\n"
+			"end_header\n", digits, numv
+		);
+		
+		/* if we've looped once already, exit the loop */
+		if (loops)
+			break;
+		
+		/* write vertex data, one image at a time */
+		for (z = 0; z < d; z += density)
+		{
+			/* get pixels and convert to 8-bit (value range [0,255]) */
+			inv_get_plane(inv, pix16, (int)floor(z), INV_PLANE_AXIAL);
+			pix8 = inv_make_8bit(pix16, w, h);
+			
+			/* for every pixel in image */
+			for (y = 0; y < h; y += density)
+			{
+				for (x = 0; x < w; x += density)
+				{
+					int v = pix8[(int)floor(y) * w + (int)floor(x)];
+					
+					/* skip pixels with values out of desired range */
+					if (v < minv || v > maxv)
+						continue;
+					
+					/* x y z r g b a */
+					fprintf(fp, "%f %f %f %d %d %d %d\n", x, y, z, v, v, v, v);
+					numv += 1;
+				}
+			}
+		}
+		
+		/* rewind to header */
+		fseek(fp, 0, SEEK_SET);
+	}
+	
+	/* cleanup */
+	free(pix16);
+	fclose(fp);
+	
+	/* success */
+	return 0;
 }
 
 const void *inv_get_gray(struct inv *inv, int *w, int *h, int *num)
