@@ -19,7 +19,7 @@ int main(int argc, char *argv[])
 	int height;
 	int points_minv = 0;
 	int points_maxv = 0;
-	float points_density = 1;
+	float points_density = 0;
 	int i;
 	
 	/* show arguments */
@@ -28,18 +28,24 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "args: %s invivo.inv\n", progname);
 		fprintf(stderr, "  optional args:\n");
 		fprintf(stderr, "    --binary  W,H\n");
-		fprintf(stderr, "        indicates input file is binary\n");
-		fprintf(stderr, "        data previously exported using\n");
-		fprintf(stderr, "        the --dump option\n");
-		fprintf(stderr, "        e.g. --binary 536,536\n");
+		fprintf(stderr, "        * indicates input file is binary data\n");
+		fprintf(stderr, "          previously exported using the --dump option\n");
+		fprintf(stderr, "        * e.g. --binary 536,536\n");
 		fprintf(stderr, "    --dump    out.bin\n");
-		fprintf(stderr, "        specifies output binary file\n");
+		fprintf(stderr, "        * specifies output binary file to create;\n");
+		fprintf(stderr, "        * the file will contain a series of raw images\n");
+		fprintf(stderr, "          stored in 16-bit unsigned little-endian format\n");
 		fprintf(stderr, "    --points  out.ply min,max,density\n");
-		fprintf(stderr, "        specifies output point cloud file (Stanford .ply);\n");
-		fprintf(stderr, "        writes only points in value range [min,max];\n");
-		fprintf(stderr, "        min/max expected to be in range [0,255]\n");
-		fprintf(stderr, "        density expected to be in range 0.0 < n <= 1.0\n");
-		fprintf(stderr, "        e.g. --points out.ply 20,255,0.25\n");
+		fprintf(stderr, "        * specifies output point cloud file to create;\n");
+		fprintf(stderr, "        * the file will be a Stanford .ply containing a series\n");
+		fprintf(stderr, "          of vertices in xyzrgba format\n");
+		fprintf(stderr, "        * writes only points w/ shades in value range [min,max];\n");
+		fprintf(stderr, "          min/max are expected to be in the range [0,255]\n");
+		fprintf(stderr, "        * density is expected to be in range 0.0 < n <= 1.0,\n");
+		fprintf(stderr, "          but if no value is specified, density is adaptive,\n");
+		fprintf(stderr, "          where brighter pixel clusters are assumed to be denser\n");
+		fprintf(stderr, "          (XXX adaptive density is experimental; don't use it)\n");
+		fprintf(stderr, "        * e.g. --points out.ply 20,255,0.25\n");
 		return -1;
 	}
 	
@@ -75,17 +81,25 @@ int main(int argc, char *argv[])
 		else if (!strcmp(this, "points"))
 		{
 			const char *extra = argv[i + 2];
+			int got;
 			
 			points = next;
 			
-			if (sscanf(extra, "%d,%d,%f", &points_minv, &points_maxv, &points_density) != 3)
+			got = sscanf(extra, "%d,%d,%f", &points_minv, &points_maxv, &points_density);
+			
+			/* density is optional; if not specified, use adaptive density */
+			if (got == 2)
+				points_density = 0;
+			
+			/* not enough parameters */
+			if (got < 2)
 			{
 			L_points_fail:
 				fprintf(stderr, "argument '%s %s %s' malformatted\n", this, next, extra);
 				return -1;
 			}
 			
-			// Sanity check values
+			/* sanity checks */
 			if (points_minv < 0 || points_minv > 255)
 			{
 				fprintf(stderr, "minv bad value, expected value 0 <= n <= 255\n");
@@ -96,7 +110,7 @@ int main(int argc, char *argv[])
 				fprintf(stderr, "maxv bad value, expected value 0 <= n <= 255\n");
 				goto L_points_fail;
 			}
-			if (points_density <= 0 || points_density > 1)
+			if (got > 2 && (points_density <= 0 || points_density > 1))
 			{
 				fprintf(stderr, "density bad value, expected value 0.0 < n <= 1.0\n");
 				goto L_points_fail;

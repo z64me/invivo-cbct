@@ -3,6 +3,7 @@
 #include <string.h>
 #include <assert.h>
 #include <stdint.h>
+#include <stdbool.h>
 #include <math.h>
 #include <jasper/jasper.h>
 
@@ -535,19 +536,36 @@ int inv_dump_pointcloud(struct inv *inv, const char *fn, int minv, int maxv, flo
 	float x;
 	float y;
 	float z;
+	float ox[256];
+	float oy[256];
+	float oz[256];
 	int w;
 	int h;
 	int d;
+	int i;
+	bool is_adaptive = false;
 	
 	assert(inv);
 	assert(fn);
-	assert(density > 0 && density <= 1);
+	assert(density <= 1);
 	assert(minv >= 0 && minv <= 255);
 	assert(maxv >= 0 && maxv <= 255);
 	assert(inv->gray);
 	assert(inv->grayWidth);
 	assert(inv->grayHeight);
 	assert(inv->grayNum);
+	
+	/* clear */
+	for (i = 0; i < 256; ++i)
+		ox[i] = oy[i] = oz[i] = -1;
+	
+	/* adaptive density */
+	if (density <= 0)
+	{
+		fprintf(stderr, "warning: adaptive density is experimental\n");
+		is_adaptive = true;
+		density = 1;
+	}
 	
 	/* 3D dimensions of full image stack (width, height, depth) */
 	w = inv->grayWidth;
@@ -626,6 +644,35 @@ int inv_dump_pointcloud(struct inv *inv, const char *fn, int minv, int maxv, flo
 					if (v < minv || v > maxv)
 						continue;
 					
+					/* experimenting with adaptive density */
+					if (is_adaptive)
+					{
+						float ad;
+						
+						v >>= 4;
+						
+						ad = v / 1024.0;
+						
+						if (!ad)
+							continue;
+						
+						ad = 1.0 / ad;
+						
+						if (fabs(x - ox[v]) >= ad
+							|| fabs(y - oy[v]) >= ad
+							|| fabs(z - oz[v]) >= ad
+						)
+						{
+							ox[v] = x - fmod(x, ad);
+							oy[v] = y - fmod(y, ad);
+							oz[v] = z - fmod(z, ad);
+						}
+						else
+							continue;
+						
+						v <<= 4;
+					}
+					
 					/* x y z r g b a */
 					fprintf(fp, "%f %f %f %d %d %d %d\n", x, y, z, v, v, v, v);
 					numv += 1;
@@ -636,6 +683,9 @@ int inv_dump_pointcloud(struct inv *inv, const char *fn, int minv, int maxv, flo
 		/* rewind to header */
 		fseek(fp, 0, SEEK_SET);
 	}
+	
+	/* debug output */
+	fprintf(stderr, "wrote %d vertices\n", numv);
 	
 	/* cleanup */
 	free(pix16);
