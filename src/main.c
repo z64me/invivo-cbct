@@ -25,8 +25,9 @@ int main(int argc, char *argv[])
 	/* show arguments */
 	if (argc < 2)
 	{
-		fprintf(stderr, "args: %s invivo.inv\n", progname);
-		fprintf(stderr, "  optional args:\n");
+		fprintf(stderr, "args: %s --options invivo.inv\n", progname);
+		fprintf(stderr, "  the input file is always the last argument;\n");
+		fprintf(stderr, "  optional arguments (these are the --options):\n");
 		fprintf(stderr, "    --binary  W,H\n");
 		fprintf(stderr, "        * indicates input file is binary data\n");
 		fprintf(stderr, "          previously exported using the --dump option\n");
