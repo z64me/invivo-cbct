@@ -21,6 +21,7 @@ struct inv
 	
 	/* AppendedData contents */
 	void *gray; // 16-bit grayscale image strip
+	uint32_t *grayJPCsz; // size of each JPC container
 	size_t graySz; // size of gray memory block
 	unsigned grayNum; // number of images in strip
 	unsigned grayJPC; // number of JPC containers
@@ -60,10 +61,11 @@ static int jasper_begin(void)
 
 static inline int AppendedData_parse(struct inv *inv)
 {
-	const uint8_t magic[] = { 0xff, 0x4f, 0xff, 0x51 }; // JPC start
 	uint8_t *data;
 	uint8_t *dataStart;
+	uint8_t *dataJPCblock;
 	uint8_t *gray;
+	uint32_t *grayJPCsz;
 	size_t dataSz = inv->AppendedDataSz;
 	unsigned int i;
 	
@@ -75,34 +77,47 @@ static inline int AppendedData_parse(struct inv *inv)
 	
 	/* number of JPC containers */
 	inv->grayJPC = LEu32(dataStart + 4);
+	assert(inv->grayJPC);
 	
-	/* what I have deduced about the header so far:
+	/* and their sizes */
+	inv->grayJPCsz = grayJPCsz = malloc(inv->grayJPC * sizeof(*grayJPCsz));
+	assert(grayJPCsz);
+	for (i = 0, data = dataStart + 4 * sizeof(uint32_t); i < inv->grayJPC; ++i, data += sizeof(uint32_t))
+		grayJPCsz[i] = LEu32(data);
+	for (i = 0; i < inv->grayJPC; ++i)
+		fprintf(stdout, "%08x\n", grayJPCsz[i]);
+	
+	/* the JPC block is located immediately after the header, which has a length
+	 * of four 32-bit words + an array of 32-bit words describing each JPC's size
+	 */
+	dataJPCblock = dataStart + (4 + inv->grayJPC) * sizeof(uint32_t);
+	
+	/* what I have deduced about the file structure so far:
+	 * 
 	 * struct inv_header
 	 * {
 	 *    uint32_t magic;     // 0x2020205F aka string "   _" (magic value?)
 	 *    uint32_t num;       // (LE) number of JPC containers
 	 *    uint32_t cmpnum;    // (LE) number of components per container?
-	 *    uint32_t unk0;      // unknown
-	 *    uint32_t unk1[num]; // array of 32-bit values, one for each container
+	 *    uint32_t unk;       // (LE?) (unknown; equals cmpnum - 1 in my CBCT)
+	 *    uint32_t size[num]; // (LE) filesize of each JPC file
 	 * };
-	 * the remainder of the file is a series of JPEG 2000
-	 * codestreams (JPC specifically) sandwiched together
+	 * 
+	 * immediately following the header is a series of JPEG 2000
+	 * codestreams (JPC specifically) sandwiched together; the
+	 * size table defined in the header is used to determine how
+	 * many bytes to advance to find the next JPC in the series
+	 * 
+	 * the file appears to end with a three-byte footer 0x0A2020 aka string "\n  "
 	 */
 	
-	/* first pass: assert that all dimensions match */
-	for (i = 0, data = dataStart;;)
+	/* first pass: assert that all dimensions match
+	 * TODO: consider getting dimensions from the XML instead + sanity check while parsing
+	 */
+	for (i = 0, data = dataJPCblock; i < inv->grayJPC; data += grayJPCsz[i++])
 	{
 		int width;
 		int height;
-		
-		/* get start of next JPC */
-		++data;
-		data = memmem(data, dataSz - (data - dataStart), magic, sizeof(magic));
-		if (!data)
-			break;
-		
-		/* number of JPC containers encountered */
-		++i;
 		
 		/* extract width */
 		width = BEu32(data + 8);
@@ -113,7 +128,6 @@ static inline int AppendedData_parse(struct inv *inv)
 		{
 			inv->grayWidth = width;
 			inv->grayHeight = height;
-			continue;
 		}
 		
 		/* images within all JPC containers expected to be the same dimensions */
@@ -125,13 +139,6 @@ static inline int AppendedData_parse(struct inv *inv)
 			);
 			return 1;
 		}
-	}
-	
-	/* detected a different number of containers than the header suggests */
-	if (i != inv->grayJPC)
-	{
-		fprintf(stderr, "expected %d JPC containers, found %d\n", inv->grayJPC, i);
-		return 1;
 	}
 	
 	/* allocate memory for 16-bit image data for each image (7 components per JPC) */
@@ -151,20 +158,15 @@ static inline int AppendedData_parse(struct inv *inv)
 	}
 	
 	/* second pass: parse all the JPC containers using libjasper */
-	for (inv->grayNum = 0, gray = inv->gray, data = dataStart;;)
+	for (i = inv->grayNum = 0, gray = inv->gray, data = dataJPCblock; i < inv->grayJPC; data += grayJPCsz[i++])
 	{
 		jas_image_t *image;
 		jas_stream_t *stream;
+		unsigned cmp;
 		int fmt;
 		
-		/* get start of next JPC */
-		++data;
-		data = memmem(data, dataSz - (data - dataStart), magic, sizeof(magic));
-		if (!data)
-			break;
-		
 		/* open stream */
-		stream = jas_stream_memopen((void*)data, dataSz - (data - dataStart));
+		stream = jas_stream_memopen((void*)data, grayJPCsz[i]);
 		if (!stream)
 		{
 			fprintf(stderr, "jas_stream_memopen error\n");
@@ -186,7 +188,7 @@ static inline int AppendedData_parse(struct inv *inv)
 		}
 		
 		/* get 16-bit grayscale pixel data for each component */
-		for (i = 0; i < jas_image_numcmpts(image); ++i, inv->grayNum++)
+		for (cmp = 0; cmp < jas_image_numcmpts(image); ++cmp, inv->grayNum++)
 		{
 			int width = jas_image_width(image);
 			int height = jas_image_height(image);
@@ -197,7 +199,7 @@ static inline int AppendedData_parse(struct inv *inv)
 			{
 				for (x = 0; x < width; ++x)
 				{
-					uint16_t v = jas_image_readcmptsample(image, i, x, y);
+					uint16_t v = jas_image_readcmptsample(image, cmp, x, y);
 					
 					v -= 0x8000;
 					
@@ -218,6 +220,7 @@ static inline int AppendedData_parse(struct inv *inv)
 		jas_stream_close(stream);
 		jas_image_destroy(image);
 		
+		/* it can be slow, so I tossed this here to report progress */
 		fprintf(stdout, "%p\n", data);
 	}
 	
@@ -315,6 +318,9 @@ void inv_free(struct inv *inv)
 	
 	if (inv->AppendedData)
 		free(inv->AppendedData);
+	
+	if (inv->grayJPCsz)
+		free(inv->grayJPCsz);
 	
 	if (inv->gray)
 		free(inv->gray);
