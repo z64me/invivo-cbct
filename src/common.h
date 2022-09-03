@@ -15,5 +15,6 @@ void *memstr(const void *hay, size_t haySz, const char *needle);
 /* endianness */
 uint32_t LEu32(const void *ptr);
 uint32_t BEu32(const void *ptr);
+void fputLEu32(const uint32_t v, FILE *fp);
 
 #endif /* COMMON_H_INCLUDED */

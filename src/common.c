@@ -25,6 +25,15 @@ uint32_t BEu32(const void *ptr)
 	return (b[0] << 24) | (b[1] << 16) | (b[2] << 8) | (b[3]);
 }
 
+/* write little-endian encoded u32 to file */
+void fputLEu32(const uint32_t v, FILE *fp)
+{
+	fputc(v, fp);
+	fputc(v >> 8, fp);
+	fputc(v >> 16, fp);
+	fputc(v >> 24, fp);
+}
+
 /* memchr copy-pasted from Android Bionic
  * https://android.googlesource.com/platform/bionic/+/ics-mr0/libc/string/memchr.c
  */

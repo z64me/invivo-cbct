@@ -6,6 +6,7 @@
 #include <stdbool.h>
 #include <math.h>
 #include <jasper/jasper.h>
+#include <base64.h>
 
 #include "inv.h"
 #include "common.h"
@@ -713,4 +714,204 @@ const void *inv_get_gray(struct inv *inv, int *w, int *h, int *num)
 	*num = inv->grayNum;
 	
 	return inv->gray;
+}
+
+/* prepares a base64 string with a length prefix prior to encoding */
+static void PrefixedBase64(char *dst, const char *src)
+{
+	char buf[1024];
+	int srclen;
+	
+	assert(dst);
+	assert(src);
+	
+	srclen = strlen(src);
+	
+	/* xx 00 00 00 */
+	buf[0] = srclen;
+	buf[1] = buf[2] = buf[3] = 0;
+	
+	/* xx 00 00 00 H e l l o W o r l d */
+	strcpy(buf + 4, src);
+	
+	/* encode */
+	bintob64(dst, buf, srclen + 4);
+}
+
+/* writes an Invivo .inv file to the specified destination */
+int inv_write(struct inv *inv, const char *outfn, const char *firstname, const char *lastname, const char *dob)
+{
+	FILE *fp;
+	const uint8_t *gray;
+	int containerNum; // number of JPC containers
+	int i;
+	char PatientName[512]; // Last^First format
+	char PatientBirthday[32]; // YYYYMMDD format
+	const char *Watermark = "https://www.holland.vg/";
+	char currentDate[32];
+	char PatientNameBin[1024];
+	char PatientBirthdayBin[1024];
+	char WatermarkBin[1024];
+	size_t grayJPCszOff;
+	uint32_t *grayJPCsz = 0;
+	
+	assert(inv);
+	assert(outfn);
+	assert(firstname);
+	assert(lastname);
+	assert(dob);
+	
+	/* prepare current date in YYYYMMDD format */
+	{
+		time_t t = time(0);
+		struct tm *tm = localtime(&t);
+		
+		strftime(currentDate, sizeof(currentDate), "%Y%m%d", tm);
+	}
+	
+	/* format strings */
+	sprintf(PatientName, "%s^%s", lastname, firstname);
+	strcpy(PatientBirthday, dob);
+	
+	/* prepare base64 strings */
+	PrefixedBase64(PatientNameBin, PatientName);
+	PrefixedBase64(PatientBirthdayBin, PatientBirthday);
+	PrefixedBase64(WatermarkBin, Watermark);
+	
+	/* initialize libjasper */
+	if (jasper_begin())
+	{
+		fprintf(stderr, "libjasper error\n");
+		return 1;
+	}
+	
+	/* open destination file */
+	if (!(fp = fopen(outfn, "wb+")))
+	{
+		fprintf(stderr, "failed to open '%s' for writing\n", outfn);
+		return 1;
+	}
+	
+	/* prepare these for later */
+	gray = inv->gray;
+	containerNum = inv->grayNum / 7;
+	
+	/* complain if not multiple of 7 */
+	if (inv->grayNum % 7)
+	{
+		fprintf(stderr, "aborting: series contains %d images (not a multiple of 7)\n", inv->grayNum);
+		return 1;
+	}
+	
+	/* allocate space for size of each JPC container */
+	grayJPCsz = calloc(containerNum, sizeof(*grayJPCsz));
+	assert(grayJPCsz);
+	
+	/* write XML part */
+	fprintf(fp, "<INVFile version='2.0' byteOrder='LittleEndian'>\n");
+		fprintf(fp, "<CaseInfo SampleFileName=\"Hello! This file was produced by invivo-cbct, an open-source project that can be found on GitHub! Stop by my website sometime at www.holland.vg!\">\n");
+			fprintf(fp, "<IdentifyInfo GroupID=\"8\">\n");
+				fprintf(fp, "<ImageType ElementID=\"8\" Value=\"ORIGINAL\\PRIMARY\\AXIAL\"></ImageType>\n");
+				fprintf(fp, "<ImageDate ElementID=\"35\" Value=\"%s\"></ImageDate>\n", currentDate);
+				fprintf(fp, "<Modality ElementID=\"96\" Value=\"CT\"></Modality>\n");
+				fprintf(fp, "<Manufacture ElementID=\"112\" Value=\"Imaging Sciences International\"></Manufacture>\n");
+			fprintf(fp, "</IdentifyInfo>\n");
+			fprintf(fp, "<Patient GroupID=\"16\">\n");
+				fprintf(fp, "<PatientName ElementID=\"16\" Format=\"binary\" BinaryValue=\"%s\" Value=\"%s\"></PatientName>\n", PatientNameBin, PatientName);
+				fprintf(fp, "<PatientBirthDay ElementID=\"48\" Format=\"binary\" BinaryValue=\"%s\" Value=\"%s\"></PatientBirthDay>\n", PatientBirthdayBin, PatientBirthday);
+				fprintf(fp, "<PatientSex ElementID=\"64\" Format=\"binary\" BinaryValue=\"%s\" Value=\"%s\"></PatientSex>\n", WatermarkBin, Watermark);
+			fprintf(fp, "</Patient>\n");
+		fprintf(fp, "</CaseInfo>\n");
+		fprintf(fp, "<Volume  Source='Appended' Offset='0' ScalarType='Int16' Dimensions='%d %d %d' NumComp='1' Name='' Spacing='0.3 0.3 0.3' Origin='0 0 0' CoordinateSystem='0 0 0 1 0 0 0' WindowLevel='1 1' />\n", inv->grayWidth, inv->grayHeight, inv->grayNum);
+		fprintf(fp, "<AppendedData encoding='raw'>   _"); // NOTE trailing magic bytes "   _" may be necessary
+	
+	/* write AppendedData header */
+	fputLEu32(containerNum, fp);
+	fputLEu32(7, fp);
+	fputLEu32(6, fp);
+	grayJPCszOff = ftell(fp); // takes note of where the JPC size table lives
+	for (i = 0; i < containerNum; ++i)
+		fputLEu32(0, fp);
+	
+	/* close file for now */
+	fclose(fp);
+	
+	/* for each collection of 7 images in series */
+	for (i = 0; i < containerNum; ++i)
+	{
+		jas_image_t *image = jas_image_create(0, 0, JAS_CLRSPC_SRGB);
+		jas_image_cmptparm_t tmp = {
+			.tlx = 0
+			, .tly = 0
+			, .hstep = 1
+			, .vstep = 1
+			, .width = inv->grayWidth
+			, .height = inv->grayHeight
+			, .prec = 16
+			, .sgnd = 1
+		};
+		jas_stream_t *out = jas_stream_fopen(outfn, "ab+");
+		int cmp;
+		
+		/* report progress */
+		fprintf(stderr, "%d / %d\n", i + 1, containerNum);
+		
+		/* add empty components to image */
+		for (cmp = 0; cmp < 7; ++cmp)
+			jas_image_addcmpt(image, cmp, &tmp);
+		
+		/* populate pixels across each component */
+		for (cmp = 0; cmp < 7; ++cmp)
+		{
+			int width = jas_image_width(image);
+			int height = jas_image_height(image);
+			int x;
+			int y;
+			
+			for (y = 0; y < height; ++y)
+			{
+				for (x = 0; x < width; ++x)
+				{
+					uint16_t v;
+					
+					v = *gray; gray++;
+					v |= *gray << 8; gray++;
+					
+					v += 0x8000;
+					
+					jas_image_writecmptsample(image, cmp, x, y, v);
+				}
+			}
+		}
+		
+		/* write JPC and note size */
+		jas_image_encode(image, out, jas_image_strtofmt("jpc"), 0);
+		jas_stream_flush(out);
+		grayJPCsz[i] = jas_stream_getrwcount(out);
+		
+		/* cleanup */
+		jas_stream_close(out);
+		jas_image_destroy(image);
+	}
+	
+	/* write the XML footer */
+	fp = fopen(outfn, "rb+");
+	fseek(fp, 0, SEEK_END);
+	fprintf(fp, "\x0a  </AppendedData>\n"); // NOTE magic byte prefix "\n  " may be necessary
+	fprintf(fp, "</INVFile>\n");
+	
+	/* update header with size of each JPC container */
+	fseek(fp, grayJPCszOff, SEEK_SET);
+	for (i = 0; i < containerNum; ++i)
+		fputLEu32(grayJPCsz[i], fp);
+	
+	/* cleanup libjasper */
+	jasper_cleanup();
+	
+	/* cleanup */
+	free(grayJPCsz);
+	fclose(fp);
+	
+	/* success */
+	return 0;
 }

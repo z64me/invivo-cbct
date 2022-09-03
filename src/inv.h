@@ -23,5 +23,6 @@ struct inv *inv_parse(const void *src, size_t srcSz);
 struct inv *inv_load(const char *fn);
 struct inv *inv_load_binary(const char *fn, int w, int h);
 void inv_free(struct inv *inv);
+int inv_write(struct inv *inv, const char *outfn, const char *firstname, const char *lastname, const char *dob);
 
 #endif /* INV_H_INCLUDED */

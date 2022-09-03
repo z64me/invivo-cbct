@@ -13,6 +13,10 @@ int main(int argc, char *argv[])
 	const char *fn = argv[argc - 1];
 	const char *dump = 0;
 	const char *points = 0;
+	const char *invivo = 0;
+	char invivo_first[256] = {0};
+	char invivo_last[256] = {0};
+	char invivo_dob[256] = {0};
 	struct inv *inv;
 	bool isBinary = false;
 	int width;
@@ -32,6 +36,10 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "        * indicates input file is binary data\n");
 		fprintf(stderr, "          previously exported using the --dump option\n");
 		fprintf(stderr, "        * e.g. --binary 536,536\n");
+		fprintf(stderr, "    --invivo  out.inv Last,First,DOB\n");
+		fprintf(stderr, "        * writes Invivo .inv file\n");
+		fprintf(stderr, "          (supports converting binary data back to inv)\n");
+		fprintf(stderr, "        * DOB (DateOfBirth) is expected to be in YYYYMMDD format\n");
 		fprintf(stderr, "    --dump    out.bin\n");
 		fprintf(stderr, "        * specifies output binary file to create;\n");
 		fprintf(stderr, "        * the file will contain a series of raw images\n");
@@ -78,6 +86,28 @@ int main(int argc, char *argv[])
 			dump = next;
 			
 			i += 1;
+		}
+		else if (!strcmp(this, "invivo"))
+		{
+			const char *extra = argv[i + 2];
+			int got;
+			
+			invivo = next;
+			
+			got = sscanf(extra, "%[^,],%[^,],%s", invivo_last, invivo_first, invivo_dob);
+			
+			if (got != 3)
+			{
+			L_invivo_fail:
+				fprintf(stderr, "argument '%s %s %s' malformatted\n", this, next, extra);
+				return -1;
+			}
+			
+			/* not YYYYMMDD format */
+			if (strlen(invivo_dob) != 8 || strspn(invivo_dob, "0123456789") != 8)
+				goto L_invivo_fail;
+			
+			i += 2;
 		}
 		else if (!strcmp(this, "points"))
 		{
@@ -145,6 +175,10 @@ int main(int argc, char *argv[])
 	
 	/* dump inv file to point cloud */
 	if (points && inv_dump_pointcloud(inv, points, points_minv, points_maxv, points_density))
+		return -1;
+	
+	/* write Invivo .inv file */
+	if (invivo && inv_write(inv, invivo, invivo_first, invivo_last, invivo_dob))
 		return -1;
 	
 	/* viewer */
