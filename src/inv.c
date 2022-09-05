@@ -497,12 +497,15 @@ L_fail:
 	return 0;
 }
 
-struct inv *inv_load_series(const char *pattern, int low, int high)
+struct inv *inv_load_series(const char *pattern, int start, int end)
 {
 	struct inv *inv = 0;
 	uint8_t *gray = 0;
 	const int components = 7;
+	int low = start < end ? start : end;
+	int high = end > start ? end : start;
 	int num = (high - low) + 1;
+	int direction = end > start ? 1 : -1;
 	int i;
 	
 	if (!(inv = calloc(1, sizeof(*inv))))
@@ -513,7 +516,7 @@ struct inv *inv_load_series(const char *pattern, int low, int high)
 		num = ((num / components) + 1) * components;
 	
 	/* load every image */
-	for (i = low; i <= high; ++i)
+	for (i = start; i != end + direction; i += direction)
 	{
 		uint8_t *img;
 		uint8_t *pix;
@@ -526,6 +529,8 @@ struct inv *inv_load_series(const char *pattern, int low, int high)
 		/* format %04d.png -> 0001.png */
 		snprintf(path, sizeof(path), pattern, i);
 		
+		//fprintf(stderr, "load image %s\n", path);
+		
 		/* load image */
 		if (!(img = stbi_load(path, &w, &h, &n, STBI_rgb_alpha)))
 		{
@@ -534,7 +539,7 @@ struct inv *inv_load_series(const char *pattern, int low, int high)
 		}
 		
 		/* first image dictates dimensions */
-		if (i == low)
+		if (i == start)
 		{
 			inv->graySz = num * w * h * 2;
 			inv->grayNum = num;

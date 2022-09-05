@@ -39,10 +39,11 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "        * indicates input file is binary data\n");
 		fprintf(stderr, "          previously exported using the --dump option\n");
 		fprintf(stderr, "        * e.g. --binary 536,536\n");
-		fprintf(stderr, "    --series  low,high\n");
+		fprintf(stderr, "    --series  start,end\n");
 		fprintf(stderr, "        * indicates input path is an image series,\n");
 		fprintf(stderr, "          expecting C style formatting e.g. tmp/%%04d.png\n");
-		fprintf(stderr, "        * loads images numbered [low,high], inclusive\n");
+		fprintf(stderr, "        * loads images numbered [start,end], inclusive\n");
+		fprintf(stderr, "        * reverse image order by reversing start/end e.g. 256,1\n");
 		fprintf(stderr, "        * e.g. --series 1,256\n");
 		fprintf(stderr, "    --invivo  out.inv Last,First,DOB\n");
 		fprintf(stderr, "        * writes Invivo .inv file\n");

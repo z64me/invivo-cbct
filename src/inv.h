@@ -22,7 +22,7 @@ int inv_dump_pointcloud(struct inv *inv, const char *fn, int minv, int maxv, flo
 struct inv *inv_parse(const void *src, size_t srcSz);
 struct inv *inv_load(const char *fn);
 struct inv *inv_load_binary(const char *fn, int w, int h);
-struct inv *inv_load_series(const char *pattern, int low, int high);
+struct inv *inv_load_series(const char *pattern, int start, int end);
 void inv_free(struct inv *inv);
 int inv_write(struct inv *inv, const char *outfn, const char *firstname, const char *lastname, const char *dob);
 
