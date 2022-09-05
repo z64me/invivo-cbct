@@ -19,6 +19,9 @@ int main(int argc, char *argv[])
 	char invivo_dob[256] = {0};
 	struct inv *inv;
 	bool isBinary = false;
+	bool isSeries = false;
+	int series_low;
+	int series_high;
 	int width;
 	int height;
 	int points_minv = 0;
@@ -36,6 +39,11 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "        * indicates input file is binary data\n");
 		fprintf(stderr, "          previously exported using the --dump option\n");
 		fprintf(stderr, "        * e.g. --binary 536,536\n");
+		fprintf(stderr, "    --series  low,high\n");
+		fprintf(stderr, "        * indicates input path is an image series,\n");
+		fprintf(stderr, "          expecting C style formatting e.g. tmp/%%04d.png\n");
+		fprintf(stderr, "        * loads images numbered [low,high], inclusive\n");
+		fprintf(stderr, "        * e.g. --series 1,256\n");
 		fprintf(stderr, "    --invivo  out.inv Last,First,DOB\n");
 		fprintf(stderr, "        * writes Invivo .inv file\n");
 		fprintf(stderr, "          (supports converting binary data back to inv)\n");
@@ -78,6 +86,18 @@ int main(int argc, char *argv[])
 			}
 			
 			isBinary = true;
+			
+			i += 1;
+		}
+		else if (!strcmp(this, "series"))
+		{
+			if (sscanf(next, "%d,%d", &series_low, &series_high) != 2)
+			{
+				fprintf(stderr, "argument '%s %s' malformatted\n", this, next);
+				return -1;
+			}
+			
+			isSeries = true;
 			
 			i += 1;
 		}
@@ -157,10 +177,22 @@ int main(int argc, char *argv[])
 		}
 	}
 	
+	/* sanity check */
+	if (isBinary && isSeries)
+	{
+		fprintf(stderr, "error: both --binary and --series used\n");
+		return -1;
+	}
+	
 	/* load inv file */
 	if (isBinary)
 	{
 		if (!(inv = inv_load_binary(fn, width, height)))
+			return -1;
+	}
+	else if (isSeries)
+	{
+		if (!(inv = inv_load_series(fn, series_low, series_high)))
 			return -1;
 	}
 	else

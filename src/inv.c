@@ -7,6 +7,7 @@
 #include <math.h>
 #include <jasper/jasper.h>
 #include <base64.h>
+#include <stb_image.h>
 
 #include "inv.h"
 #include "common.h"
@@ -487,6 +488,98 @@ struct inv *inv_load_binary(const char *fn, int w, int h)
 	{
 		fprintf(stderr, "binary file '%s' sanity check\n", fn);
 		goto L_fail;
+	}
+	
+	return inv;
+	
+L_fail:
+	inv_free(inv);
+	return 0;
+}
+
+struct inv *inv_load_series(const char *pattern, int low, int high)
+{
+	struct inv *inv = 0;
+	uint8_t *gray = 0;
+	const int components = 7;
+	int num = (high - low) + 1;
+	int i;
+	
+	if (!(inv = calloc(1, sizeof(*inv))))
+		goto L_fail;
+	
+	/* pad to be multiple of components per JPC container */
+	if (num % components)
+		num = ((num / components) + 1) * components;
+	
+	/* load every image */
+	for (i = low; i <= high; ++i)
+	{
+		uint8_t *img;
+		uint8_t *pix;
+		char path[2048];
+		int w;
+		int h;
+		int n;
+		int k;
+		
+		/* format %04d.png -> 0001.png */
+		snprintf(path, sizeof(path), pattern, i);
+		
+		/* load image */
+		if (!(img = stbi_load(path, &w, &h, &n, STBI_rgb_alpha)))
+		{
+			fprintf(stderr, "failed to open image '%s'\n", path);
+			goto L_fail;
+		}
+		
+		/* first image dictates dimensions */
+		if (i == low)
+		{
+			inv->graySz = num * w * h * 2;
+			inv->grayNum = num;
+			inv->grayWidth = w;
+			inv->grayHeight = h;
+			if (!(inv->gray = calloc(1, inv->graySz)))
+			{
+				fprintf(stderr, "memory error\n");
+				goto L_fail;
+			}
+			gray = inv->gray;
+		}
+		
+		/* sanity check dimensions */
+		if (w != inv->grayWidth || h != inv->grayHeight)
+		{
+			fprintf(stderr, "error: images in series are not all the same dimensions\n");
+			goto L_fail;
+		}
+		
+		/* convert 4-channel 8-bit grayscale to 1-channel 16-bit grayscale */
+		for (pix = img, k = 0; k < w * h; ++k, pix += 4)
+		{
+			// TODO these are the same magic values from inv_make_8bit
+			float brightness = -0.23;
+			float contrast = 17.500031;
+			float conv = *pix;
+			uint16_t v;
+			
+			/* this is the inverse operation from inv_make_8bit */
+			conv /= 255;
+			conv -= 0.5f;
+			conv -= brightness;
+			conv /= contrast;
+			conv += 0.5f;
+			conv *= 65535.0f;
+			
+			/* LE byte order */
+			v = round(conv);
+			*gray = v; ++gray;
+			*gray = v >> 8; ++gray;
+		}
+		
+		/* cleanup */
+		stbi_image_free(img);
 	}
 	
 	return inv;
