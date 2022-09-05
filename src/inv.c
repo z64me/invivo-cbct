@@ -845,7 +845,7 @@ int inv_write(struct inv *inv, const char *outfn, const char *firstname, const c
 	int i;
 	char PatientName[512]; // Last^First format
 	char PatientBirthday[32]; // YYYYMMDD format
-	const char *Watermark = "https://www.holland.vg/";
+	const char *Watermark = "www.holland.vg";
 	char currentDate[32];
 	char PatientNameBin[1024];
 	char PatientBirthdayBin[1024];
