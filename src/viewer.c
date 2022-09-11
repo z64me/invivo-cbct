@@ -132,14 +132,59 @@ void viewer_upload_pixels(struct viewer *v, const void *src, int srcW, int srcH,
 	SDL_UnlockTexture(tex);
 }
 
+static float get_aspect(float w, float h)
+{
+	return w / h;
+}
+
+/* draws a texture while preserving its aspect ratio */
+static void draw_aspect(SDL_Renderer *ren, SDL_Texture *tex, SDL_Rect dst)
+{
+	int w;
+	int h;
+	float aspect;
+	float dst_aspect = get_aspect(dst.w, dst.h);
+	
+	SDL_QueryTexture(tex, 0, 0, &w, &h);
+	
+	aspect = get_aspect(w, h);
+	
+	/* maintain aspect ratio using letterboxing/pillarboxing */
+	if (aspect != dst_aspect)
+	{
+		dst.x += dst.w / 2;
+		dst.y += dst.h / 2;
+		
+		if (aspect < dst_aspect)
+		{
+			h = dst.h;
+			w = dst.h * aspect;
+		}
+		else
+		{
+			w = dst.w;
+			h = dst.w / aspect;
+		}
+		
+		dst.w = w;
+		dst.h = h;
+		
+		dst.x -= dst.w / 2;
+		dst.y -= dst.h / 2;
+	}
+	
+	SDL_RenderCopy(ren, tex, 0, &dst);
+}
+
 int viewer_draw(struct viewer *v)
 {
 	SDL_Renderer *ren = v->renderer;
 	
+	//SDL_SetRenderDrawColor(ren, -1, -1, -1, -1);
 	SDL_RenderClear(ren);
-	SDL_RenderCopy(ren, v->buf[0], 0, &(SDL_Rect){0, 0, VP_W, VP_H});
-	SDL_RenderCopy(ren, v->buf[1], 0, &(SDL_Rect){VP_W, 0, VP_W, VP_H});
-	SDL_RenderCopy(ren, v->buf[2], 0, &(SDL_Rect){0, VP_H, VP_W, VP_H});
+	draw_aspect(ren, v->buf[0], (SDL_Rect){0, 0, VP_W, VP_H});
+	draw_aspect(ren, v->buf[1], (SDL_Rect){VP_W, 0, VP_W, VP_H});
+	draw_aspect(ren, v->buf[2], (SDL_Rect){0, VP_H, VP_W, VP_H});
 	SDL_RenderPresent(ren);
 	
 	return 0;
