@@ -1,11 +1,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <assert.h>
 #include <SDL2/SDL.h>
 
 #define WINDOW_NAME "Invivo CBCT Viewer"
-#define IM_W 536 // TODO make dimensions not hard-coded
-#define IM_H 536
 #define VP_W 256 // a single viewport
 #define VP_H 256
 #define BUF_NUM  3
@@ -15,12 +14,20 @@ struct viewer
 	SDL_Window *window;
 	SDL_Renderer *renderer;
 	SDL_Texture *buf[BUF_NUM];
+	int im_x;
+	int im_y;
+	int im_z;
 };
 
-struct viewer *viewer_create(void)
+struct viewer *viewer_create(int x, int y, int z)
 {
 	struct viewer *v;
 	int i;
+	int dim[3][2] = { // XXX same order as enum inv_plane
+		{x, y} // axial
+		, {y, z} // sagittal
+		, {x, z} // coronal
+	};
 	
 	v = calloc(1, sizeof(*v));
 	
@@ -48,16 +55,29 @@ struct viewer *viewer_create(void)
 	if (!v->renderer)
 		return 0;
 	
+	v->im_x = x;
+	v->im_y = y;
+	v->im_z = z;
+	
 	for (i = 0; i < BUF_NUM; ++i)
 		v->buf[i] = SDL_CreateTexture(
 			v->renderer
 			, SDL_PIXELFORMAT_RGBA8888
 			, SDL_TEXTUREACCESS_STREAMING
-			, IM_W
-			, IM_H
+			, dim[i][0]
+			, dim[i][1]
 		);
 	
 	return v;
+}
+
+void viewer_get_dim(struct viewer *v, int i, int *w, int *h)
+{
+	assert(v);
+	assert(i < BUF_NUM);
+	assert(i >= 0);
+	
+	SDL_QueryTexture(v->buf[i], 0, 0, w, h);
 }
 
 int viewer_events(struct viewer *v)

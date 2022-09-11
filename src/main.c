@@ -6,6 +6,16 @@
 #include "inv.h"
 #include "viewer.h"
 
+static int max2(int a, int b)
+{
+	return a > b ? a : b;
+}
+
+static int max3(int a, int b, int c)
+{
+	return max2(max2(a, b), c);
+}
+
 int main(int argc, char *argv[])
 {
 	struct viewer *viewer = 0;
@@ -219,14 +229,17 @@ int main(int argc, char *argv[])
 		int num = inv_get_num_images(inv);
 		int w = inv_get_width(inv);
 		int h = inv_get_height(inv);
-		uint16_t *pix = malloc(w * h * sizeof(*pix));
+		int big = max3(w, h, num);
+		int arr[] = { num, w, h }; // num images per plane: axial, sagittal, coronal order
+		uint16_t *pix = calloc(big * big, sizeof(*pix));
 		
 	#if 1 /* valgrind exclude */
-		if (!(viewer = viewer_create()))
+		if (!(viewer = viewer_create(w, h, num)))
 			return -1;
 		for (;;)
 		{
 			static float frame = 0;
+			float m = frame / big;
 			int i;
 			//frame = num / 2 - 1;
 			
@@ -235,7 +248,11 @@ int main(int argc, char *argv[])
 			
 			for (i = 0; i < INV_PLANE_NUM; ++i)
 			{
-				inv_get_plane(inv, pix, frame, i);
+				int w;
+				int h;
+				
+				viewer_get_dim(viewer, i, &w, &h);
+				inv_get_plane(inv, pix, m * arr[i], i);
 				inv_make_8bit(pix, w, h);
 				viewer_upload_pixels(viewer, pix, w, h, i);
 			}
@@ -243,19 +260,19 @@ int main(int argc, char *argv[])
 			viewer_draw(viewer);
 			
 			frame += 1;
-			if (frame >= w)
+			if (frame >= big)
 				frame = 0;
 		}
 		viewer_destroy(viewer);
 	#endif
 	#if 0 /* valgrind test */
-		for (int frame = 0; frame < w; ++frame)
+		for (int frame = 0; frame < big; ++frame)
 			inv_get_plane(inv, pix, frame, INV_PLANE_AXIAL);
-		for (int frame = 0; frame < w; ++frame)
+		for (int frame = 0; frame < big; ++frame)
 			inv_get_plane(inv, pix, frame, INV_PLANE_SAGITTAL);
-		for (int frame = 0; frame < w; ++frame)
+		for (int frame = 0; frame < big; ++frame)
 			inv_get_plane(inv, pix, frame, INV_PLANE_CORONAL);
-		inv_make_8bit(pix, w, h);
+		inv_make_8bit(pix, big, big);
 	#endif
 		free(pix);
 	}
