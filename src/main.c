@@ -243,11 +243,8 @@ int main(int argc, char *argv[])
 			return -1;
 		for (;;)
 		{
-			static float frame = 0;
-			float m = frame / big;
 			int i;
 			const char *plane_name[] = { "Axial", "Sagittal", "Coronal", "Patient Info" };
-			//frame = num / 2 - 1;
 			
 			if (viewer_events(viewer))
 				break;
@@ -317,10 +314,6 @@ int main(int argc, char *argv[])
 			}
 			
 			viewer_show(viewer);
-			
-			frame += 1;
-			if (frame >= big)
-				frame = 0;
 		}
 		viewer_destroy(viewer);
 	#endif
