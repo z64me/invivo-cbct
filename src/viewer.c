@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <assert.h>
 #include <SDL2/SDL.h>
+#include "palette.h"
 
 #define WINDOW_NAME "Invivo CBCT Viewer"
 #define VP_W 256 // a single viewport
@@ -17,6 +18,7 @@ struct viewer
 	int im_x;
 	int im_y;
 	int im_z;
+	int palette;
 };
 
 struct viewer *viewer_create(int x, int y, int z)
@@ -59,6 +61,9 @@ struct viewer *viewer_create(int x, int y, int z)
 	v->im_y = y;
 	v->im_z = z;
 	
+	// palette display disabled by default
+	v->palette = -1;
+	
 	for (i = 0; i < BUF_NUM; ++i)
 		v->buf[i] = SDL_CreateTexture(
 			v->renderer
@@ -99,6 +104,12 @@ int viewer_events(struct viewer *v)
 					case SDLK_ESCAPE:
 						rval = 1;
 						break;
+					
+					case SDLK_p:
+						v->palette += 1;
+						v->palette %= palette_count();
+						fprintf(stderr, "palette = '%s'\n", palette_name(v->palette));
+						break;
 				}
 				break;
 		}
@@ -127,6 +138,18 @@ void viewer_upload_pixels(struct viewer *v, const void *src, int srcW, int srcH,
 		dst8[1] = *src8;
 		dst8[2] = *src8;
 		dst8[3] = *src8;
+		
+		// override gray shade with palette color
+		if (v->palette >= 0)
+		{
+			uint8_t tmp[3];
+			
+			palette_color(tmp, v->palette, *src8);
+			
+			dst8[1] = tmp[2];
+			dst8[2] = tmp[1];
+			dst8[3] = tmp[0];
+		}
 	}
 	
 	SDL_UnlockTexture(tex);
