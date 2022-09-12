@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <math.h>
 #include "inv.h"
 #include "viewer.h"
 
@@ -233,6 +234,8 @@ int main(int argc, char *argv[])
 		int arr[] = { num, w, h }; // num images per plane: axial, sagittal, coronal order
 		int where[] = { arr[0] / 2, arr[1] / 2, arr[2] / 2 };
 		int where_last[] = { -1, -1, -1 };
+		float where_precise[] = { where[0], where[1], where[2] };
+		bool is_animated[] = { false, true, false };
 		uint16_t *pix = calloc(big * big, sizeof(*pix));
 		
 	#if 1 /* valgrind exclude */
@@ -255,6 +258,12 @@ int main(int argc, char *argv[])
 			{
 				int w;
 				int h;
+				
+				if (is_animated[i])
+				{
+					where_precise[i] = fmod(where_precise[i] + 1, arr[i]);
+					where[i] = where_precise[i];
+				}
 				
 				/* optimization: only reprocess on change */
 				if (where[i] == where_last[i])
