@@ -119,6 +119,28 @@ int viewer_events(struct viewer *v)
 	(void)v;
 }
 
+void viewer_clear(struct viewer *v)
+{
+	SDL_Renderer *ren = v->renderer;
+	int red = 0;
+	int green = 0;
+	int blue = 0;
+	
+	if (v->palette >= 0)
+	{
+		uint8_t tmp[3];
+		
+		palette_color(tmp, v->palette, 0);
+		
+		red   = tmp[0];
+		green = tmp[1];
+		blue  = tmp[2];
+	}
+	
+	SDL_SetRenderDrawColor(ren, red, green, blue, -1);
+	SDL_RenderClear(ren);
+}
+
 void viewer_upload_pixels(struct viewer *v, const void *src, int srcW, int srcH, int idx)
 {
 	const uint8_t *src8 = src;
@@ -203,8 +225,6 @@ int viewer_draw(struct viewer *v)
 {
 	SDL_Renderer *ren = v->renderer;
 	
-	//SDL_SetRenderDrawColor(ren, -1, -1, -1, -1);
-	SDL_RenderClear(ren);
 	draw_aspect(ren, v->buf[0], (SDL_Rect){0, 0, VP_W, VP_H});
 	draw_aspect(ren, v->buf[1], (SDL_Rect){VP_W, 0, VP_W, VP_H});
 	draw_aspect(ren, v->buf[2], (SDL_Rect){0, VP_H, VP_W, VP_H});

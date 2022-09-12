@@ -9,5 +9,6 @@ int viewer_destroy(struct viewer *v);
 int viewer_events(struct viewer *v);
 int viewer_draw(struct viewer *v);
 void viewer_get_dim(struct viewer *v, int i, int *w, int *h);
+void viewer_clear(struct viewer *v);
 
 #endif /* VIEWER_H_INCLUDED */

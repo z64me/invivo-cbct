@@ -246,6 +246,8 @@ int main(int argc, char *argv[])
 			if (viewer_events(viewer))
 				break;
 			
+			viewer_clear(viewer);
+			
 			for (i = 0; i < INV_PLANE_NUM; ++i)
 			{
 				int w;
