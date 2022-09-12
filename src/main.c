@@ -231,6 +231,7 @@ int main(int argc, char *argv[])
 		int h = inv_get_height(inv);
 		int big = max3(w, h, num);
 		int arr[] = { num, w, h }; // num images per plane: axial, sagittal, coronal order
+		int where[] = { arr[0] / 2, arr[1] / 2, arr[2] / 2 };
 		uint16_t *pix = calloc(big * big, sizeof(*pix));
 		
 	#if 1 /* valgrind exclude */
@@ -241,7 +242,7 @@ int main(int argc, char *argv[])
 			static float frame = 0;
 			float m = frame / big;
 			int i;
-			const char *plane_name[] = { "Axial", "Sagittal", "Coronal", "Info" };
+			const char *plane_name[] = { "Axial", "Sagittal", "Coronal", "Patient Info" };
 			//frame = num / 2 - 1;
 			
 			if (viewer_events(viewer))
@@ -255,7 +256,7 @@ int main(int argc, char *argv[])
 				int h;
 				
 				viewer_get_dim(viewer, i, &w, &h);
-				inv_get_plane(inv, pix, m * arr[i], i);
+				inv_get_plane(inv, pix, where[i], i);
 				inv_make_8bit(pix, w, h);
 				viewer_upload_pixels(viewer, pix, w, h, i);
 			}
@@ -274,7 +275,29 @@ int main(int argc, char *argv[])
 				/* controls and more will live here */
 				if (i == INV_PLANE_NUM)
 				{
-					viewer_label(viewer, "Hello, world!", x, y);
+					int k;
+					int indent = 10;
+					
+					/* patient info */
+					x += indent;
+					{
+						y += viewer_label(viewer, "Hello, world!", x, y);
+					}
+					x -= indent;
+					
+					/* anatomical planes */
+					y += viewer_label(viewer, "Anatomical Planes", x, y);
+					x += indent;
+					for (k = 0; k < INV_PLANE_NUM; ++k)
+					{
+						y += viewer_label(viewer, plane_name[k], x, y);
+						x += indent;
+						{
+							y += viewer_slider_int(viewer, x, y, 100, &where[k], 0, arr[k]);
+						}
+						x -= indent;
+					}
+					x -= indent;
 				}
 			}
 			

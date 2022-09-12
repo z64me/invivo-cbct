@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <assert.h>
+#include <stdbool.h>
 #include <SDL2/SDL.h>
 #include "palette.h"
 
@@ -11,8 +12,17 @@
 #define BUF_NUM  3
 #define TEXT_PAD 4
 
+#define COMMON_CONTROL_H 13
+
 #define SDL_EZTEXT_IMPLEMENTATION
 #include "SDL_EzText/SDL_EzText.h"
+
+struct viewer_mouse
+{
+	int x;
+	int y;
+	bool is_held;
+};
 
 struct viewer
 {
@@ -23,7 +33,36 @@ struct viewer
 	int im_y;
 	int im_z;
 	int palette;
+	struct viewer_mouse mouse;
+	struct color
+	{
+		uint8_t r;
+		uint8_t g;
+		uint8_t b;
+	} contrast;
 };
+
+static bool is_mouse_in_rect(struct viewer *v, int x, int y, int w, int h)
+{
+	struct viewer_mouse m;
+	
+	assert(v);
+	
+	m = v->mouse;
+	
+	return m.x >= x
+		&& m.y >= y
+		&& m.x <= x + w
+		&& m.y <= y + h
+	;
+}
+
+static bool is_mouse_held(struct viewer *v)
+{
+	assert(v);
+	
+	return v->mouse.is_held;
+}
 
 /* get the best contrasting font color against a background color */
 static uint32_t best_contrast(uint32_t background_rgb)
@@ -139,6 +178,19 @@ int viewer_events(struct viewer *v)
 						break;
 				}
 				break;
+			
+			case SDL_MOUSEMOTION:
+				v->mouse.x = event.motion.x;
+				v->mouse.y = event.motion.y;
+				break;
+			
+			case SDL_MOUSEBUTTONDOWN:
+				v->mouse.is_held = true;
+				break;
+			
+			case SDL_MOUSEBUTTONUP:
+				v->mouse.is_held = false;
+				break;
 		}
 	}
 	
@@ -171,6 +223,9 @@ void viewer_clear(struct viewer *v)
 	/* get best font color to contrast against background */
 	rgb = (red << 16) | (green << 8) | blue;
 	rgb = best_contrast(rgb);
+	v->contrast.r = rgb >> 16;
+	v->contrast.g = rgb >> 8;
+	v->contrast.b = rgb;
 	SDL_EzText_SetColor((rgb << 8) | 0xff);
 }
 
@@ -290,4 +345,24 @@ int viewer_label(struct viewer *v, const char *str, int x, int y)
 	SDL_EzText(v->renderer, x, y, str);
 	
 	return SDL_EzTextStringHeight(str);
+}
+
+int viewer_slider_int(struct viewer *v, int x, int y, int w, int *n, int lo, int hi)
+{
+	int h = COMMON_CONTROL_H;
+	
+	assert(v);
+	assert(n);
+	assert(lo < hi);
+	
+	if (is_mouse_in_rect(v, x, y, w, h) && is_mouse_held(v))
+		*n = lo + (((float)(v->mouse.x - x)) / w) * (hi - lo);
+	
+	SDL_SetRenderDrawBlendMode(v->renderer, SDL_BLENDMODE_BLEND);
+	SDL_SetRenderDrawColor(v->renderer, v->contrast.r, v->contrast.g, v->contrast.b, 0x80);
+	SDL_RenderFillRect(v->renderer, &(SDL_Rect){x, y, w, h});
+	SDL_SetRenderDrawColor(v->renderer, v->contrast.r, v->contrast.g, v->contrast.b, 0xff);
+	SDL_RenderFillRect(v->renderer, &(SDL_Rect){x, y, ((float)*n) / (hi - lo) * w, h});
+	
+	return SDL_EzTextStringHeight("A");
 }
