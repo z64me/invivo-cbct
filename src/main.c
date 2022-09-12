@@ -241,21 +241,13 @@ int main(int argc, char *argv[])
 			static float frame = 0;
 			float m = frame / big;
 			int i;
+			const char *plane_name[] = { "Axial", "Sagittal", "Coronal", "Info" };
 			//frame = num / 2 - 1;
 			
 			if (viewer_events(viewer))
 				break;
 			
 			viewer_clear(viewer);
-			
-			/* basic info and controls */
-			{
-				int x;
-				int y;
-				
-				viewer_get_quadrant(viewer, 1, 1, &x, &y);
-				viewer_label(viewer, "Hello, world!", x, y);
-			}
 			
 			for (i = 0; i < INV_PLANE_NUM; ++i)
 			{
@@ -268,7 +260,25 @@ int main(int argc, char *argv[])
 				viewer_upload_pixels(viewer, pix, w, h, i);
 			}
 			
-			viewer_draw(viewer);
+			viewer_draw_quadrants(viewer);
+			
+			/* draw name above each quadrant */
+			for (i = 0; i <= INV_PLANE_NUM; ++i)
+			{
+				int x;
+				int y;
+				
+				viewer_get_quadrant(viewer, i % 2, i / 2, &x, &y);
+				y += viewer_label(viewer, plane_name[i], x, y);
+				
+				/* controls and more will live here */
+				if (i == INV_PLANE_NUM)
+				{
+					viewer_label(viewer, "Hello, world!", x, y);
+				}
+			}
+			
+			viewer_show(viewer);
 			
 			frame += 1;
 			if (frame >= big)

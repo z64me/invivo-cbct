@@ -9,6 +9,7 @@
 #define VP_W 256 // a single viewport
 #define VP_H 256
 #define BUF_NUM  3
+#define TEXT_PAD 4
 
 #define SDL_EZTEXT_IMPLEMENTATION
 #include "SDL_EzText/SDL_EzText.h"
@@ -41,10 +42,10 @@ void viewer_get_quadrant(struct viewer *v, int x, int y, int *ul_x, int *ul_y)
 	assert(v);
 	
 	if (ul_x)
-		*ul_x = x * VP_W;
+		*ul_x = x * VP_W + TEXT_PAD;
 	
 	if (ul_y)
-		*ul_y = y * VP_H;
+		*ul_y = y * VP_H + TEXT_PAD;
 }
 
 struct viewer *viewer_create(int x, int y, int z)
@@ -253,16 +254,22 @@ static void draw_aspect(SDL_Renderer *ren, SDL_Texture *tex, SDL_Rect dst)
 	SDL_RenderCopy(ren, tex, 0, &dst);
 }
 
-int viewer_draw(struct viewer *v)
+int viewer_draw_quadrants(struct viewer *v)
 {
 	SDL_Renderer *ren = v->renderer;
 	
 	draw_aspect(ren, v->buf[0], (SDL_Rect){0, 0, VP_W, VP_H});
 	draw_aspect(ren, v->buf[1], (SDL_Rect){VP_W, 0, VP_W, VP_H});
 	draw_aspect(ren, v->buf[2], (SDL_Rect){0, VP_H, VP_W, VP_H});
-	SDL_RenderPresent(ren);
 	
 	return 0;
+}
+
+void viewer_show(struct viewer *v)
+{
+	assert(v);
+	
+	SDL_RenderPresent(v->renderer);
 }
 
 int viewer_destroy(struct viewer *v)
@@ -278,7 +285,9 @@ int viewer_destroy(struct viewer *v)
 	return 0;
 }
 
-void viewer_label(struct viewer *v, const char *str, int x, int y)
+int viewer_label(struct viewer *v, const char *str, int x, int y)
 {
 	SDL_EzText(v->renderer, x, y, str);
+	
+	return SDL_EzTextStringHeight(str);
 }
