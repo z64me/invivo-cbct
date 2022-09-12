@@ -232,6 +232,7 @@ int main(int argc, char *argv[])
 		int big = max3(w, h, num);
 		int arr[] = { num, w, h }; // num images per plane: axial, sagittal, coronal order
 		int where[] = { arr[0] / 2, arr[1] / 2, arr[2] / 2 };
+		int where_last[] = { -1, -1, -1 };
 		uint16_t *pix = calloc(big * big, sizeof(*pix));
 		
 	#if 1 /* valgrind exclude */
@@ -254,6 +255,11 @@ int main(int argc, char *argv[])
 			{
 				int w;
 				int h;
+				
+				/* optimization: only reprocess on change */
+				if (where[i] == where_last[i])
+					continue;
+				where_last[i] = where[i];
 				
 				viewer_get_dim(viewer, i, &w, &h);
 				inv_get_plane(inv, pix, where[i], i);
