@@ -10,6 +10,9 @@
 #define VP_H 256
 #define BUF_NUM  3
 
+#define SDL_EZTEXT_IMPLEMENTATION
+#include "SDL_EzText/SDL_EzText.h"
+
 struct viewer
 {
 	SDL_Window *window;
@@ -20,6 +23,29 @@ struct viewer
 	int im_z;
 	int palette;
 };
+
+/* get the best contrasting font color against a background color */
+static uint32_t best_contrast(uint32_t background_rgb)
+{
+	uint8_t red = background_rgb >> 16;
+	uint8_t green = background_rgb >> 8;
+	uint8_t blue = background_rgb;
+	double yiq = (299 * red + 587 * green + 114 * blue) / 1000;
+	
+	return yiq >= 128 ? 0 : -1;
+	//return background_rgb >= 0xffffff / 2 ? 0 : -1;
+}
+
+void viewer_get_quadrant(struct viewer *v, int x, int y, int *ul_x, int *ul_y)
+{
+	assert(v);
+	
+	if (ul_x)
+		*ul_x = x * VP_W;
+	
+	if (ul_y)
+		*ul_y = y * VP_H;
+}
 
 struct viewer *viewer_create(int x, int y, int z)
 {
@@ -125,6 +151,7 @@ void viewer_clear(struct viewer *v)
 	int red = 0;
 	int green = 0;
 	int blue = 0;
+	uint32_t rgb;
 	
 	if (v->palette >= 0)
 	{
@@ -139,6 +166,11 @@ void viewer_clear(struct viewer *v)
 	
 	SDL_SetRenderDrawColor(ren, red, green, blue, -1);
 	SDL_RenderClear(ren);
+	
+	/* get best font color to contrast against background */
+	rgb = (red << 16) | (green << 8) | blue;
+	rgb = best_contrast(rgb);
+	SDL_EzText_SetColor((rgb << 8) | 0xff);
 }
 
 void viewer_upload_pixels(struct viewer *v, const void *src, int srcW, int srcH, int idx)
@@ -244,4 +276,9 @@ int viewer_destroy(struct viewer *v)
 	free(v);
 	
 	return 0;
+}
+
+void viewer_label(struct viewer *v, const char *str, int x, int y)
+{
+	SDL_EzText(v->renderer, x, y, str);
 }

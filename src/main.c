@@ -248,6 +248,15 @@ int main(int argc, char *argv[])
 			
 			viewer_clear(viewer);
 			
+			/* basic info and controls */
+			{
+				int x;
+				int y;
+				
+				viewer_get_quadrant(viewer, 1, 1, &x, &y);
+				viewer_label(viewer, "Hello, world!", x, y);
+			}
+			
 			for (i = 0; i < INV_PLANE_NUM; ++i)
 			{
 				int w;

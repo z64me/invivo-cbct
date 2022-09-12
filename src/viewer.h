@@ -10,5 +10,7 @@ int viewer_events(struct viewer *v);
 int viewer_draw(struct viewer *v);
 void viewer_get_dim(struct viewer *v, int i, int *w, int *h);
 void viewer_clear(struct viewer *v);
+void viewer_label(struct viewer *v, const char *str, int x, int y);
+void viewer_get_quadrant(struct viewer *v, int x, int y, int *ul_x, int *ul_y);
 
 #endif /* VIEWER_H_INCLUDED */
