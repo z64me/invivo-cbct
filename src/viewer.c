@@ -181,11 +181,13 @@ int viewer_events(struct viewer *v)
 						rval = 1;
 						break;
 					
+					/*
 					case SDLK_p:
 						v->palette += 1;
 						v->palette %= palette_count();
 						fprintf(stderr, "palette = '%s'\n", palette_name(v->palette));
 						break;
+					*/
 				}
 				break;
 			
@@ -451,4 +453,11 @@ bool viewer_button(struct viewer *v, const char *str, int x, int y)
 	}
 	
 	return is_hovered && was_mouse_pressed(v);
+}
+
+void viewer_set_palette(struct viewer *v, int palette)
+{
+	assert(v);
+	
+	v->palette = palette;
 }

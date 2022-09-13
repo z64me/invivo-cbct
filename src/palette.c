@@ -37,6 +37,9 @@ void palette_color(uint8_t dst[3], int palette, int index)
 
 const char *palette_name(int palette)
 {
+	if (palette < 0)
+		return "None";
+	
 	assert(palette >= (int)0);
 	assert(palette < (int)COUNT);
 	

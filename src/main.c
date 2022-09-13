@@ -6,6 +6,7 @@
 #include <math.h>
 #include "inv.h"
 #include "viewer.h"
+#include "palette.h"
 
 static int max2(int a, int b)
 {
@@ -236,6 +237,7 @@ int main(int argc, char *argv[])
 		int where_last[] = { -1, -1, -1 };
 		float where_precise[] = { where[0], where[1], where[2] };
 		int is_animated[] = { 0, 0, 0 };
+		int palette = -1;
 		uint16_t *pix = calloc(big * big, sizeof(*pix));
 		
 	#if 1 /* valgrind exclude */
@@ -308,6 +310,7 @@ int main(int argc, char *argv[])
 					x -= indent;
 					
 					/* anatomical planes */
+					y += h;
 					if (viewer_button(viewer, "Reset", x + 200, y))
 						for (p = 0; p < INV_PLANE_NUM; ++p)
 							where_precise[p] = (where[p] = arr[p] / 2);
@@ -349,6 +352,42 @@ int main(int argc, char *argv[])
 							y += h;
 						}
 						x -= indent;
+					}
+					x -= indent;
+					
+					/* misc */
+					y += h;
+					y += viewer_label(viewer, "Settings", x, y);
+					x += indent;
+					{
+						char buf[1024];
+						int w = 200;
+						
+						snprintf(buf, sizeof(buf), "Palette: %s", palette_name(palette));
+						x += w;
+						{
+							int palette_old = palette;
+							
+							if (viewer_button(viewer, "<", x, y))
+								palette -= 1;
+							if (viewer_button(viewer, ">", x + 24, y))
+								palette += 1;
+							
+							/* on change, queue change */
+							if (palette != palette_old)
+								for (p = 0; p < INV_PLANE_NUM; ++p)
+									where_last[p] = -1;
+							
+							/* wrapping */
+							if (palette >= palette_count())
+								palette = -1;
+							else if (palette < -1)
+								palette = palette_count() - 1;
+							
+							viewer_set_palette(viewer, palette);
+						}
+						x -= w;
+						y += viewer_label(viewer, buf, x, y);
 					}
 					x -= indent;
 				}

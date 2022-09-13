@@ -18,5 +18,6 @@ int viewer_label_inverted(struct viewer *v, const char *str, int x, int y);
 void viewer_get_quadrant(struct viewer *v, int x, int y, int *ul_x, int *ul_y);
 int viewer_slider_int(struct viewer *v, int x, int y, int w, int *n, int lo, int hi);
 bool viewer_button(struct viewer *v, const char *str, int x, int y);
+void viewer_set_palette(struct viewer *v, int palette);
 
 #endif /* VIEWER_H_INCLUDED */
