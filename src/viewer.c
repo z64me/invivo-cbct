@@ -510,11 +510,15 @@ static void draw_quadrant(struct viewer *v, int quadrant)
 	int x;
 	int y;
 	int i;
+	SDL_Color red = { 0xff, 0, 0, 0xff };
+	SDL_Color green = { 0, 0xff, 0, 0xff };
+	SDL_Color yellow = { 0xff, 0xff, 0, 0xff };
 	bool is_vertical[3][3] = { // orientation of every axis relative to every other axis
 		{ false, false, false }
 		, { true, true, true }
 		, { false, true, false }
 	};
+	SDL_Color color[3] = { red, green, yellow }; // color of each axis line
 	
 	/* draw subwindow */
 	viewer_get_quadrant(v, quadrant % 2, quadrant / 2, &x, &y);
@@ -524,6 +528,7 @@ static void draw_quadrant(struct viewer *v, int quadrant)
 	for (i = 0; v->show_axis_guides && i < 3; ++i)
 	{
 		SDL_Rect tmp;
+		SDL_Color col = color[i];
 		
 		if (i == quadrant)
 			continue;
@@ -551,7 +556,7 @@ static void draw_quadrant(struct viewer *v, int quadrant)
 			SDL_SetRenderDrawColor(ren, c, c, c, a);
 		}
 		SDL_RenderFillRect(ren, &(SDL_Rect){tmp.x - 1, tmp.y - 1, tmp.w + 2, tmp.h + 2});
-		SDL_SetRenderDrawColor(ren, -1, 0, 0, -1);
+		SDL_SetRenderDrawColor(ren, col.r, col.g, col.b, -1);
 		SDL_RenderFillRect(ren, &tmp);
 	}
 }
