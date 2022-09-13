@@ -21,6 +21,7 @@ struct viewer_mouse
 {
 	int x;
 	int y;
+	int wheel;
 	bool is_held;
 	bool was_pressed;
 };
@@ -171,6 +172,7 @@ int viewer_events(struct viewer *v)
 	int rval = 0;
 	
 	v->mouse.was_pressed = false;
+	v->mouse.wheel = 0;
 	
 	while (SDL_PollEvent(&event))
 	{
@@ -210,6 +212,13 @@ int viewer_events(struct viewer *v)
 				if (v->mouse.is_held)
 					v->mouse.was_pressed = true;
 				v->mouse.is_held = false;
+				break;
+			
+			case SDL_MOUSEWHEEL:
+				if (event.wheel.y > 0)
+					v->mouse.wheel = 1;
+				else if (event.wheel.y < 0)
+					v->mouse.wheel = -1;
 				break;
 		}
 	}
@@ -545,4 +554,19 @@ static void draw_quadrant(struct viewer *v, int quadrant)
 		SDL_SetRenderDrawColor(ren, -1, 0, 0, -1);
 		SDL_RenderFillRect(ren, &tmp);
 	}
+}
+
+int viewer_get_mouse_wheel_in_quadrant(struct viewer *v, int quadrant)
+{
+	int x;
+	int y;
+	
+	assert(v);
+	
+	viewer_get_quadrant(v, quadrant % 2, quadrant / 2, &x, &y);
+	
+	if (is_mouse_in_rect(v, x, y, VP_W, VP_H))
+		return v->mouse.wheel;
+	
+	return 0;
 }

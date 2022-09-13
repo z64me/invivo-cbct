@@ -265,6 +265,14 @@ int main(int argc, char *argv[])
 					where_precise[i] = fmod(where_precise[i] + 1 * is_animated[i], arr[i]);
 					where[i] = where_precise[i];
 				}
+				else
+				{
+					/* handle mousewheel */
+					where[i] += viewer_get_mouse_wheel_in_quadrant(viewer, i);
+					
+					/* if not animated, where takes priority over where_precise */
+					where_precise[i] = where[i];
+				}
 				
 				/* bounds checking */
 				if (where[i] < 0)

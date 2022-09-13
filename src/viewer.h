@@ -21,5 +21,6 @@ bool viewer_button(struct viewer *v, const char *str, int x, int y);
 void viewer_set_palette(struct viewer *v, int palette);
 void viewer_set_inverted(struct viewer *v, bool is_inverted);
 void viewer_set_axes(struct viewer *v, bool enabled, float x, float y, float z);
+int viewer_get_mouse_wheel_in_quadrant(struct viewer *v, int quadrant);
 
 #endif /* VIEWER_H_INCLUDED */
