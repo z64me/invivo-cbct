@@ -295,9 +295,28 @@ int main(int argc, char *argv[])
 			}
 			
 			/* update axis guides */
-			viewer_set_axes(viewer, show_axis_guides, where_percent[0], where_percent[1], where_percent[2]);
+			viewer_set_axes(viewer, show_axis_guides, where_percent);
 			
-			viewer_draw_quadrants(viewer);
+			/* draw quadrants and process axis guide changes */
+			{
+				float where_percent_old[INV_PLANE_NUM];
+				
+				for (i = 0; i < INV_PLANE_NUM; ++i)
+					where_percent_old[i] = where_percent[i];
+				
+				/* this function can change the axis guide values */
+				viewer_draw_quadrants(viewer);
+				
+				for (i = 0; i < INV_PLANE_NUM; ++i)
+				{
+					if (where_percent[i] != where_percent_old[i])
+					{
+						where_precise[i] = where_percent[i] * arr[i];
+						where[i] = where_precise[i];
+						where_last[i] = -1;
+					}
+				}
+			}
 			
 			/* draw name above each quadrant */
 			for (i = 0; i <= INV_PLANE_NUM; ++i)

@@ -34,7 +34,7 @@ struct viewer
 	int im_x;
 	int im_y;
 	int im_z;
-	float axis[3];
+	float *axis;
 	int palette;
 	struct viewer_mouse mouse;
 	struct color
@@ -53,10 +53,26 @@ struct viewer
 		SDL_Cursor *now;
 		bool has_changed;
 	} cursor;
+	struct
+	{
+		int axis;
+		int quad;
+		bool active;
+	} grab_axis;
 };
 
 /* private function prototypes */
 static void draw_quadrant(struct viewer *v, int quadrant);
+
+static float clamp(float v, float min, float max)
+{
+	if (v < min)
+		v = min;
+	if (v > max)
+		v = max;
+	
+	return v;
+}
 
 static void set_cursor(struct viewer *v, SDL_Cursor *cursor)
 {
@@ -542,14 +558,12 @@ void viewer_set_inverted(struct viewer *v, bool is_inverted)
 	v->is_inverted = is_inverted;
 }
 
-void viewer_set_axes(struct viewer *v, bool enabled, float x, float y, float z)
+void viewer_set_axes(struct viewer *v, bool enabled, float *axis)
 {
 	assert(v);
 	
 	v->show_axis_guides = enabled;
-	v->axis[0] = x;
-	v->axis[1] = y;
-	v->axis[2] = z;
+	v->axis = axis;
 }
 
 static void draw_quadrant(struct viewer *v, int quadrant)
@@ -570,6 +584,8 @@ static void draw_quadrant(struct viewer *v, int quadrant)
 	};
 	SDL_Color color[3] = { red, green, yellow }; // color of each axis line
 	
+	assert(axis);
+	
 	/* draw subwindow */
 	viewer_get_quadrant(v, quadrant % 2, quadrant / 2, &x, &y);
 	rect = draw_aspect(ren, v->buf[quadrant], (SDL_Rect){x, y, VP_W, VP_H});
@@ -579,12 +595,13 @@ static void draw_quadrant(struct viewer *v, int quadrant)
 	{
 		SDL_Rect tmp;
 		SDL_Color col = color[i];
+		bool this_is_vertical = is_vertical[i][quadrant];
 		
 		if (i == quadrant)
 			continue;
 		
 		/* derive cross-section line */
-		if (is_vertical[i][quadrant])
+		if (this_is_vertical)
 		{
 			tmp = (SDL_Rect){rect.x + rect.w * axis[i], rect.y, 1, rect.h};
 			
@@ -608,6 +625,50 @@ static void draw_quadrant(struct viewer *v, int quadrant)
 		SDL_RenderFillRect(ren, &(SDL_Rect){tmp.x - 1, tmp.y - 1, tmp.w + 2, tmp.h + 2});
 		SDL_SetRenderDrawColor(ren, col.r, col.g, col.b, -1);
 		SDL_RenderFillRect(ren, &tmp);
+		
+		/* cursor styling on mouse hover */
+		if (v->grab_axis.active == false
+			&& is_mouse_in_rect(v, tmp.x - 5, tmp.y - 5, tmp.w + 10, tmp.h + 10)
+		)
+		{
+			if (this_is_vertical)
+				set_cursor(v, v->cursor.horz);
+			else
+				set_cursor(v, v->cursor.vert);
+			
+			if (is_mouse_held(v))
+			{
+				v->grab_axis.active = true;
+				v->grab_axis.axis = i;
+				v->grab_axis.quad = quadrant;
+			}
+		}
+		
+		/* grabbing an axis */
+		if (v->grab_axis.active && v->grab_axis.axis == i && v->grab_axis.quad == quadrant)
+		{
+			if (is_mouse_held(v))
+			{
+				if (this_is_vertical)
+					set_cursor(v, v->cursor.horz);
+				else
+					set_cursor(v, v->cursor.vert);
+				
+				if (this_is_vertical)
+					axis[i] = (float)(v->mouse.x - rect.x) / rect.w;
+				else
+					axis[i] = (float)(v->mouse.y - rect.y) / rect.h;
+				
+				/* clamp bounds */
+				axis[i] = clamp(axis[i], 0.001, 0.999);
+				
+				/* very specific conditions for inverting the axis */
+				if (i == 0 || (i == 2 && quadrant == 1))
+					axis[i] = 1 - axis[i];
+			}
+			else
+				v->grab_axis.active = false;
+		}
 	}
 }
 

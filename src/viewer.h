@@ -20,7 +20,7 @@ int viewer_slider_int(struct viewer *v, int x, int y, int w, int *n, int lo, int
 bool viewer_button(struct viewer *v, const char *str, int x, int y);
 void viewer_set_palette(struct viewer *v, int palette);
 void viewer_set_inverted(struct viewer *v, bool is_inverted);
-void viewer_set_axes(struct viewer *v, bool enabled, float x, float y, float z);
+void viewer_set_axes(struct viewer *v, bool enabled, float *axis);
 int viewer_get_mouse_wheel_in_quadrant(struct viewer *v, int quadrant);
 
 #endif /* VIEWER_H_INCLUDED */
