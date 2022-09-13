@@ -45,10 +45,40 @@ struct viewer
 	} contrast;
 	bool is_inverted;
 	bool show_axis_guides;
+	struct
+	{
+		SDL_Cursor *horz;
+		SDL_Cursor *vert;
+		SDL_Cursor *arrow;
+		SDL_Cursor *now;
+		bool has_changed;
+	} cursor;
 };
 
 /* private function prototypes */
 static void draw_quadrant(struct viewer *v, int quadrant);
+
+static void set_cursor(struct viewer *v, SDL_Cursor *cursor)
+{
+	assert(v);
+	assert(cursor);
+	
+	if (cursor == v->cursor.now)
+		return;
+	
+	v->cursor.now = cursor;
+	v->cursor.has_changed = true;
+}
+
+static void update_cursor(struct viewer *v)
+{
+	assert(v);
+	
+	if (v->cursor.has_changed)
+		SDL_SetCursor(v->cursor.now);
+	
+	v->cursor.has_changed = false;
+}
 
 static bool is_mouse_in_rect(struct viewer *v, int x, int y, int w, int h)
 {
@@ -141,6 +171,11 @@ struct viewer *viewer_create(int x, int y, int z)
 	v->im_x = x;
 	v->im_y = y;
 	v->im_z = z;
+	
+	// cursors
+	v->cursor.arrow = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_ARROW);
+	v->cursor.horz = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_SIZEWE);
+	v->cursor.vert = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_SIZENS);
 	
 	// palette display disabled by default
 	v->palette = -1;
@@ -259,6 +294,9 @@ void viewer_clear(struct viewer *v)
 	v->contrast.g = rgb >> 8;
 	v->contrast.b = rgb;
 	SDL_EzText_SetColor((rgb << 8) | 0xff);
+	
+	/* default cursor */
+	set_cursor(v, v->cursor.arrow);
 }
 
 void viewer_upload_pixels(struct viewer *v, const void *src, int srcW, int srcH, int idx)
@@ -362,16 +400,23 @@ void viewer_show(struct viewer *v)
 	assert(v);
 	
 	SDL_RenderPresent(v->renderer);
+	
+	update_cursor(v);
 }
 
 int viewer_destroy(struct viewer *v)
 {
 	int i;
 	
+	// cleanup cursors
+	SDL_FreeCursor(v->cursor.arrow);
+	SDL_FreeCursor(v->cursor.vert);
+	SDL_FreeCursor(v->cursor.horz);
+	
 	for (i = 0; i < BUF_NUM; ++i)
 		SDL_DestroyTexture(v->buf[i]);
 	SDL_DestroyRenderer(v->renderer);
-	SDL_DestroyWindow(v->window);	
+	SDL_DestroyWindow(v->window);
 	free(v);
 	
 	return 0;
@@ -395,8 +440,13 @@ int viewer_slider_int(struct viewer *v, int x, int y, int w, int *n, int lo, int
 	
 	a = v->contrast.r < 127 ? 0x80 : 0xc0;
 	
-	if (is_mouse_in_rect(v, x, y, w, h) && is_mouse_held(v))
-		*n = lo + (((float)(v->mouse.x - x)) / w) * (hi - lo);
+	if (is_mouse_in_rect(v, x, y, w, h))
+	{
+		set_cursor(v, v->cursor.horz);
+		
+		if (is_mouse_held(v))
+			*n = lo + (((float)(v->mouse.x - x)) / w) * (hi - lo);
+	}
 	
 	SDL_SetRenderDrawBlendMode(v->renderer, SDL_BLENDMODE_BLEND);
 	SDL_SetRenderDrawColor(v->renderer, v->contrast.r, v->contrast.g, v->contrast.b, a);
