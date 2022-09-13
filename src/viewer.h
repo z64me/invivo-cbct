@@ -20,5 +20,6 @@ int viewer_slider_int(struct viewer *v, int x, int y, int w, int *n, int lo, int
 bool viewer_button(struct viewer *v, const char *str, int x, int y);
 void viewer_set_palette(struct viewer *v, int palette);
 void viewer_set_inverted(struct viewer *v, bool is_inverted);
+void viewer_set_axes(struct viewer *v, bool enabled, float x, float y, float z);
 
 #endif /* VIEWER_H_INCLUDED */

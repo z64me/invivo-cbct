@@ -236,9 +236,11 @@ int main(int argc, char *argv[])
 		int where[] = { arr[0] / 2, arr[1] / 2, arr[2] / 2 };
 		int where_last[] = { -1, -1, -1 };
 		float where_precise[] = { where[0], where[1], where[2] };
+		float where_percent[] = { 0, 0, 0 };
 		int is_animated[] = { 0, 0, 0 };
 		int palette = -1;
 		uint16_t *pix = calloc(big * big, sizeof(*pix));
+		bool show_axis_guides = false;
 		
 	#if 1 /* valgrind exclude */
 		if (!(viewer = viewer_create(w, h, num)))
@@ -270,6 +272,9 @@ int main(int argc, char *argv[])
 				else if (where[i] >= arr[i])
 					where_precise[i] = where[i] = 0;
 				
+				/* percent of each axis, used for axis guide */
+				where_percent[i] = where_precise[i] / arr[i];
+				
 				/* optimization: only reprocess on change */
 				if (where[i] == where_last[i])
 					continue;
@@ -281,6 +286,9 @@ int main(int argc, char *argv[])
 				viewer_upload_pixels(viewer, pix, w, h, i);
 			}
 			
+			/* update axis guides */
+			viewer_set_axes(viewer, show_axis_guides, where_percent[0], where_percent[1], where_percent[2]);
+			
 			viewer_draw_quadrants(viewer);
 			
 			/* draw name above each quadrant */
@@ -289,6 +297,7 @@ int main(int argc, char *argv[])
 				int x;
 				int y;
 				int h;
+				int pad = 2;
 				
 				viewer_get_quadrant(viewer, i % 2, i / 2, &x, &y);
 				y += (h = viewer_label(viewer, plane_name[i], x, y));
@@ -325,7 +334,7 @@ int main(int argc, char *argv[])
 							int h;
 							int old = where[p];
 							
-							h = viewer_slider_int(viewer, x, y, w, &where[p], 0, arr[p]);
+							h = viewer_slider_int(viewer, x, y, w, &where[p], 0, arr[p] - 1);
 							if (where[p] != old)
 								where_precise[p] = where[p];
 							
@@ -388,14 +397,14 @@ int main(int argc, char *argv[])
 							viewer_set_palette(viewer, palette);
 						}
 						x -= w;
-						y += viewer_label(viewer, buf, x, y);
+						y += viewer_label(viewer, buf, x, y) + pad;
 						
 						/* invert intensity */
 						{
 							static bool inverted = false;
 							const char *result = inverted ? "*" : " ";
 							
-							if (viewer_button(viewer, result, x + 150, y))
+							if (viewer_button(viewer, result, x, y))
 							{
 								inverted = !inverted;
 								viewer_set_inverted(viewer, inverted);
@@ -405,7 +414,16 @@ int main(int argc, char *argv[])
 									where_last[p] = -1;
 							}
 						}
-						y += viewer_label(viewer, "Invert Intensity", x, y);
+						y += viewer_label(viewer, "Invert Intensity", x + 24, y) + pad;
+						
+						/* show axis guides */
+						{
+							const char *result = show_axis_guides ? "*" : " ";
+							
+							if (viewer_button(viewer, result, x, y))
+								show_axis_guides = !show_axis_guides;
+						}
+						y += viewer_label(viewer, "Show Axis Guides", x + 24, y) + pad;
 					}
 					x -= indent;
 				}

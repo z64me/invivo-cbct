@@ -33,6 +33,7 @@ struct viewer
 	int im_x;
 	int im_y;
 	int im_z;
+	float axis[3];
 	int palette;
 	struct viewer_mouse mouse;
 	struct color
@@ -42,7 +43,11 @@ struct viewer
 		uint8_t b;
 	} contrast;
 	bool is_inverted;
+	bool show_axis_guides;
 };
+
+/* private function prototypes */
+static void draw_quadrant(struct viewer *v, int quadrant);
 
 static bool is_mouse_in_rect(struct viewer *v, int x, int y, int w, int h)
 {
@@ -293,8 +298,8 @@ static float get_aspect(float w, float h)
 	return w / h;
 }
 
-/* draws a texture while preserving its aspect ratio */
-static void draw_aspect(SDL_Renderer *ren, SDL_Texture *tex, SDL_Rect dst)
+/* draws a texture while preserving its aspect ratio (returns destination rectangle) */
+static SDL_Rect draw_aspect(SDL_Renderer *ren, SDL_Texture *tex, SDL_Rect dst)
 {
 	int w;
 	int h;
@@ -330,15 +335,15 @@ static void draw_aspect(SDL_Renderer *ren, SDL_Texture *tex, SDL_Rect dst)
 	}
 	
 	SDL_RenderCopy(ren, tex, 0, &dst);
+	
+	return dst;
 }
 
 int viewer_draw_quadrants(struct viewer *v)
 {
-	SDL_Renderer *ren = v->renderer;
-	
-	draw_aspect(ren, v->buf[0], (SDL_Rect){0, 0, VP_W, VP_H});
-	draw_aspect(ren, v->buf[1], (SDL_Rect){VP_W, 0, VP_W, VP_H});
-	draw_aspect(ren, v->buf[2], (SDL_Rect){0, VP_H, VP_W, VP_H});
+	draw_quadrant(v, 0);
+	draw_quadrant(v, 1);
+	draw_quadrant(v, 2);
 	
 	return 0;
 }
@@ -476,4 +481,68 @@ void viewer_set_inverted(struct viewer *v, bool is_inverted)
 	assert(v);
 	
 	v->is_inverted = is_inverted;
+}
+
+void viewer_set_axes(struct viewer *v, bool enabled, float x, float y, float z)
+{
+	assert(v);
+	
+	v->show_axis_guides = enabled;
+	v->axis[0] = x;
+	v->axis[1] = y;
+	v->axis[2] = z;
+}
+
+static void draw_quadrant(struct viewer *v, int quadrant)
+{
+	SDL_Renderer *ren = v->renderer;
+	SDL_Rect rect;
+	float *axis = v->axis;
+	int x;
+	int y;
+	int i;
+	bool is_vertical[3][3] = { // orientation of every axis relative to every other axis
+		{ false, false, false }
+		, { true, true, true }
+		, { false, true, false }
+	};
+	
+	/* draw subwindow */
+	viewer_get_quadrant(v, quadrant % 2, quadrant / 2, &x, &y);
+	rect = draw_aspect(ren, v->buf[quadrant], (SDL_Rect){x, y, VP_W, VP_H});
+	
+	/* draw axes */
+	for (i = 0; v->show_axis_guides && i < 3; ++i)
+	{
+		SDL_Rect tmp;
+		
+		if (i == quadrant)
+			continue;
+		
+		/* derive cross-section line */
+		if (is_vertical[i][quadrant])
+		{
+			tmp = (SDL_Rect){rect.x + rect.w * axis[i], rect.y, 1, rect.h};
+			
+			if (quadrant == 1 && i == 2)
+				tmp.x = rect.x + rect.w * (1 - axis[i]);
+		}
+		else
+		{
+			tmp = (SDL_Rect){rect.x, rect.y + rect.h * (1 - axis[i]), rect.w, 1};
+			
+			if (i == 2)
+				tmp.y = rect.y + rect.h * axis[i];
+		}
+		
+		/* draw cross-section line */
+		{
+			int c = 255 - v->contrast.r;
+			int a = c == 0 ? 0x40 : 0xc0;
+			SDL_SetRenderDrawColor(ren, c, c, c, a);
+		}
+		SDL_RenderFillRect(ren, &(SDL_Rect){tmp.x - 1, tmp.y - 1, tmp.w + 2, tmp.h + 2});
+		SDL_SetRenderDrawColor(ren, -1, 0, 0, -1);
+		SDL_RenderFillRect(ren, &tmp);
+	}
 }
