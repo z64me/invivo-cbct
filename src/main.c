@@ -235,7 +235,7 @@ int main(int argc, char *argv[])
 		int where[] = { arr[0] / 2, arr[1] / 2, arr[2] / 2 };
 		int where_last[] = { -1, -1, -1 };
 		float where_precise[] = { where[0], where[1], where[2] };
-		bool is_animated[] = { false, true, false };
+		int is_animated[] = { 0, 0, 0 };
 		uint16_t *pix = calloc(big * big, sizeof(*pix));
 		
 	#if 1 /* valgrind exclude */
@@ -258,9 +258,15 @@ int main(int argc, char *argv[])
 				
 				if (is_animated[i])
 				{
-					where_precise[i] = fmod(where_precise[i] + 1, arr[i]);
+					where_precise[i] = fmod(where_precise[i] + 1 * is_animated[i], arr[i]);
 					where[i] = where_precise[i];
 				}
+				
+				/* bounds checking */
+				if (where[i] < 0)
+					where_precise[i] = where[i] = arr[i] - 1;
+				else if (where[i] >= arr[i])
+					where_precise[i] = where[i] = 0;
 				
 				/* optimization: only reprocess on change */
 				if (where[i] == where_last[i])
@@ -280,32 +286,67 @@ int main(int argc, char *argv[])
 			{
 				int x;
 				int y;
+				int h;
 				
 				viewer_get_quadrant(viewer, i % 2, i / 2, &x, &y);
-				y += viewer_label(viewer, plane_name[i], x, y);
+				y += (h = viewer_label(viewer, plane_name[i], x, y));
 				
 				/* controls and more will live here */
 				if (i == INV_PLANE_NUM)
 				{
-					int k;
+					int p;
 					int indent = 10;
 					
 					/* patient info */
 					x += indent;
 					{
 						y += viewer_label(viewer, "Hello, world!", x, y);
+						if (viewer_button(viewer, "Test Button", x, y))
+							fprintf(stderr, "Test Button\n");
+						y += h;
 					}
 					x -= indent;
 					
 					/* anatomical planes */
+					if (viewer_button(viewer, "Reset", x + 200, y))
+						for (p = 0; p < INV_PLANE_NUM; ++p)
+							where_precise[p] = (where[p] = arr[p] / 2);
 					y += viewer_label(viewer, "Anatomical Planes", x, y);
 					x += indent;
-					for (k = 0; k < INV_PLANE_NUM; ++k)
+					for (p = 0; p < INV_PLANE_NUM; ++p)
 					{
-						y += viewer_label(viewer, plane_name[k], x, y);
+						y += viewer_label(viewer, plane_name[p], x, y);
 						x += indent;
 						{
-							y += viewer_slider_int(viewer, x, y, 100, &where[k], 0, arr[k]);
+							int w = 100;
+							int h;
+							int old = where[p];
+							
+							h = viewer_slider_int(viewer, x, y, w, &where[p], 0, arr[p]);
+							if (where[p] != old)
+								where_precise[p] = where[p];
+							
+							x += w + indent;
+							{
+								char buf[16];
+								
+								snprintf(buf, sizeof(buf), "%d", where[p]);
+								
+								if (viewer_button(viewer, "<", x, y) && !is_animated[p])
+									where[p] -= 1;
+								viewer_label_inverted(viewer, buf, x - w, y);
+								if (viewer_button(viewer, ">", x + 24, y) && !is_animated[p])
+									where[p] += 1;
+								if (viewer_button(viewer, "<<", x + 48, y))
+									is_animated[p] = -1;
+								if (viewer_button(viewer, ">>", x + 48 + 32, y))
+									is_animated[p] = 1;
+								if (is_animated[p] && viewer_button(viewer, "@", x + 48 + 32 + 32, y))
+									is_animated[p] = 0;
+							}
+							x -= w + indent;
+							
+							y += h;
 						}
 						x -= indent;
 					}

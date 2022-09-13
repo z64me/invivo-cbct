@@ -1,6 +1,8 @@
 #ifndef VIEWER_H_INCLUDED
 #define VIEWER_H_INCLUDED
 
+#include <stdbool.h>
+
 struct viewer;
 
 void viewer_upload_pixels(struct viewer *v, const void *src, int srcW, int srcH, int idx);
@@ -12,7 +14,9 @@ void viewer_show(struct viewer *v);
 void viewer_get_dim(struct viewer *v, int i, int *w, int *h);
 void viewer_clear(struct viewer *v);
 int viewer_label(struct viewer *v, const char *str, int x, int y);
+int viewer_label_inverted(struct viewer *v, const char *str, int x, int y);
 void viewer_get_quadrant(struct viewer *v, int x, int y, int *ul_x, int *ul_y);
 int viewer_slider_int(struct viewer *v, int x, int y, int w, int *n, int lo, int hi);
+bool viewer_button(struct viewer *v, const char *str, int x, int y);
 
 #endif /* VIEWER_H_INCLUDED */

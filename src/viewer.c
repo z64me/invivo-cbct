@@ -7,12 +7,12 @@
 #include "palette.h"
 
 #define WINDOW_NAME "Invivo CBCT Viewer"
-#define VP_W 256 // a single viewport
-#define VP_H 256
+#define VP_W 300 // a single quadrant
+#define VP_H 300
 #define BUF_NUM  3
 #define TEXT_PAD 4
 
-#define COMMON_CONTROL_H 13
+#define COMMON_CONTROL_H 15
 
 #define SDL_EZTEXT_IMPLEMENTATION
 #include "SDL_EzText/SDL_EzText.h"
@@ -22,6 +22,7 @@ struct viewer_mouse
 	int x;
 	int y;
 	bool is_held;
+	bool was_pressed;
 };
 
 struct viewer
@@ -62,6 +63,13 @@ static bool is_mouse_held(struct viewer *v)
 	assert(v);
 	
 	return v->mouse.is_held;
+}
+
+static bool was_mouse_pressed(struct viewer *v)
+{
+	assert(v);
+	
+	return v->mouse.was_pressed;
 }
 
 /* get the best contrasting font color against a background color */
@@ -156,6 +164,8 @@ int viewer_events(struct viewer *v)
 	SDL_Event event;
 	int rval = 0;
 	
+	v->mouse.was_pressed = false;
+	
 	while (SDL_PollEvent(&event))
 	{
 		switch (event.type)
@@ -189,6 +199,8 @@ int viewer_events(struct viewer *v)
 				break;
 			
 			case SDL_MOUSEBUTTONUP:
+				if (v->mouse.is_held)
+					v->mouse.was_pressed = true;
 				v->mouse.is_held = false;
 				break;
 		}
@@ -350,19 +362,93 @@ int viewer_label(struct viewer *v, const char *str, int x, int y)
 int viewer_slider_int(struct viewer *v, int x, int y, int w, int *n, int lo, int hi)
 {
 	int h = COMMON_CONTROL_H;
+	int a;
 	
 	assert(v);
 	assert(n);
 	assert(lo < hi);
 	
+	a = v->contrast.r < 127 ? 0x80 : 0xc0;
+	
 	if (is_mouse_in_rect(v, x, y, w, h) && is_mouse_held(v))
 		*n = lo + (((float)(v->mouse.x - x)) / w) * (hi - lo);
 	
 	SDL_SetRenderDrawBlendMode(v->renderer, SDL_BLENDMODE_BLEND);
-	SDL_SetRenderDrawColor(v->renderer, v->contrast.r, v->contrast.g, v->contrast.b, 0x80);
+	SDL_SetRenderDrawColor(v->renderer, v->contrast.r, v->contrast.g, v->contrast.b, a);
 	SDL_RenderFillRect(v->renderer, &(SDL_Rect){x, y, w, h});
 	SDL_SetRenderDrawColor(v->renderer, v->contrast.r, v->contrast.g, v->contrast.b, 0xff);
 	SDL_RenderFillRect(v->renderer, &(SDL_Rect){x, y, ((float)*n) / (hi - lo) * w, h});
 	
 	return SDL_EzTextStringHeight("A");
+}
+
+int viewer_label_inverted(struct viewer *v, const char *str, int x, int y)
+{
+	int z;
+	int retval;
+	
+	assert(v);
+	
+	/* inverted color state */
+	z = 255 - v->contrast.r;
+	SDL_EzText_SetColor((z << 24) | (z << 16) | (z << 8) | 0xff);
+	
+	/* display */
+	retval = viewer_label(v, str, x, y);
+	
+	/* restore state */
+	z = v->contrast.r;
+	SDL_EzText_SetColor((z << 24) | (z << 16) | (z << 8) | 0xff);
+	
+	return retval;
+}
+
+bool viewer_button(struct viewer *v, const char *str, int x, int y)
+{
+	int h = COMMON_CONTROL_H;
+	bool is_hovered = false;
+	bool is_inverted = false;
+	int w = SDL_EzTextStringWidth(str) + 4 * 2;
+	
+	assert(v);
+	
+	if (is_mouse_in_rect(v, x, y, w, h))
+	{
+		is_hovered = true;
+		
+		if (is_mouse_held(v))
+			is_inverted = true;
+	}
+	
+	SDL_SetRenderDrawBlendMode(v->renderer, SDL_BLENDMODE_BLEND);
+	if (is_hovered)
+	{
+		int a = 0x60;
+		
+		if (is_inverted)
+			a = 0xff;
+		else if (v->contrast.r == 0) // weaker contrast on lighter backgrounds
+			a = 0x30;
+		
+		SDL_SetRenderDrawColor(v->renderer, v->contrast.r, v->contrast.g, v->contrast.b, a);
+		SDL_RenderFillRect(v->renderer, &(SDL_Rect){x, y, w, h});
+	}
+	SDL_SetRenderDrawColor(v->renderer, v->contrast.r, v->contrast.g, v->contrast.b, 0xff);
+	SDL_RenderDrawRect(v->renderer, &(SDL_Rect){x, y, w, h});
+	
+	if (is_inverted)
+	{
+		int z = 255 - v->contrast.r;
+		SDL_EzText_SetColor((z << 24) | (z << 16) | (z << 8) | 0xff);
+	}
+	
+	viewer_label(v, str, x + 4, y);
+	
+	if (is_inverted)
+	{
+		int z = v->contrast.r;
+		SDL_EzText_SetColor((z << 24) | (z << 16) | (z << 8) | 0xff);
+	}
+	
+	return is_hovered && was_mouse_pressed(v);
 }
