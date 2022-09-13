@@ -363,6 +363,7 @@ int main(int argc, char *argv[])
 						char buf[1024];
 						int w = 200;
 						
+						/* palette */
 						snprintf(buf, sizeof(buf), "Palette: %s", palette_name(palette));
 						x += w;
 						{
@@ -373,7 +374,7 @@ int main(int argc, char *argv[])
 							if (viewer_button(viewer, ">", x + 24, y))
 								palette += 1;
 							
-							/* on change, queue change */
+							/* on change, queue refresh */
 							if (palette != palette_old)
 								for (p = 0; p < INV_PLANE_NUM; ++p)
 									where_last[p] = -1;
@@ -388,6 +389,23 @@ int main(int argc, char *argv[])
 						}
 						x -= w;
 						y += viewer_label(viewer, buf, x, y);
+						
+						/* invert intensity */
+						{
+							static bool inverted = false;
+							const char *result = inverted ? "*" : " ";
+							
+							if (viewer_button(viewer, result, x + 150, y))
+							{
+								inverted = !inverted;
+								viewer_set_inverted(viewer, inverted);
+								
+								/* on change, queue refresh */
+								for (p = 0; p < INV_PLANE_NUM; ++p)
+									where_last[p] = -1;
+							}
+						}
+						y += viewer_label(viewer, "Invert Intensity", x, y);
 					}
 					x -= indent;
 				}

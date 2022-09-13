@@ -41,6 +41,7 @@ struct viewer
 		uint8_t g;
 		uint8_t b;
 	} contrast;
+	bool is_inverted;
 };
 
 static bool is_mouse_in_rect(struct viewer *v, int x, int y, int w, int h)
@@ -215,16 +216,19 @@ int viewer_events(struct viewer *v)
 void viewer_clear(struct viewer *v)
 {
 	SDL_Renderer *ren = v->renderer;
-	int red = 0;
-	int green = 0;
-	int blue = 0;
+	uint8_t red = 0;
+	uint8_t green = 0;
+	uint8_t blue = 0;
 	uint32_t rgb;
+	
+	if (v->is_inverted)
+		red = green = blue = 255;
 	
 	if (v->palette >= 0)
 	{
 		uint8_t tmp[3];
 		
-		palette_color(tmp, v->palette, 0);
+		palette_color(tmp, v->palette, red);
 		
 		red   = tmp[0];
 		green = tmp[1];
@@ -258,17 +262,22 @@ void viewer_upload_pixels(struct viewer *v, const void *src, int srcW, int srcH,
 	dst8 = dst;
 	for (i = 0; i < srcW * srcH; ++i, src8 += 1, dst8 += 4)
 	{
+		int s = *src8;
+		
+		if (v->is_inverted)
+			s = 255 - s;
+		
 		dst8[0] = 0xff; // opacity
-		dst8[1] = *src8;
-		dst8[2] = *src8;
-		dst8[3] = *src8;
+		dst8[1] = s;
+		dst8[2] = s;
+		dst8[3] = s;
 		
 		// override gray shade with palette color
 		if (v->palette >= 0)
 		{
 			uint8_t tmp[3];
 			
-			palette_color(tmp, v->palette, *src8);
+			palette_color(tmp, v->palette, s);
 			
 			dst8[1] = tmp[2];
 			dst8[2] = tmp[1];
@@ -460,4 +469,11 @@ void viewer_set_palette(struct viewer *v, int palette)
 	assert(v);
 	
 	v->palette = palette;
+}
+
+void viewer_set_inverted(struct viewer *v, bool is_inverted)
+{
+	assert(v);
+	
+	v->is_inverted = is_inverted;
 }
