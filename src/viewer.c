@@ -551,7 +551,7 @@ static void draw_quadrant(struct viewer *v, int quadrant)
 		
 		/* draw cross-section line */
 		{
-			int c = 255 - v->contrast.r;
+			int c = 0;//255 - v->contrast.r;
 			int a = c == 0 ? 0x40 : 0xc0;
 			SDL_SetRenderDrawColor(ren, c, c, c, a);
 		}
