@@ -23,6 +23,7 @@ struct inv
 	
 	/* AppendedData contents */
 	void *gray; // 16-bit grayscale image strip
+	void *grayEnd; // end of gray, for bounds checking
 	uint32_t *grayJPCsz; // size of each JPC container
 	size_t graySz; // size of gray memory block
 	unsigned grayNum; // number of images in strip
@@ -30,6 +31,73 @@ struct inv
 	int grayWidth; // dimensions of grayscale images
 	int grayHeight;
 };
+
+/* loads all raw pixel data from a JPC into a buffer */
+static void jpcLoadPixelsInto(void **dst, void *src, uint32_t sz, void *dstEnd)
+{
+	jas_image_t *image;
+	jas_stream_t *stream;
+	unsigned cmp;
+	int fmt;
+	uint8_t *gray = *dst;
+	
+	/* open stream */
+	stream = jas_stream_memopen(src, sz);
+	if (!stream)
+	{
+		fprintf(stderr, "jas_stream_memopen error\n");
+		abort();
+	}
+	
+	/* get image format */
+	if ((fmt = jas_image_getfmt(stream)) < 0)
+	{
+		fprintf(stderr, "jas_image_getfmt error\n");
+		abort();
+	}
+	
+	/* decode stream to image */
+	if (!(image = jas_image_decode(stream, fmt, 0)))
+	{
+		fprintf(stderr, "jas_image_decode error\n");
+		abort();
+	}
+	
+	/* get 16-bit grayscale pixel data for each component */
+	for (cmp = 0; cmp < jas_image_numcmpts(image); ++cmp)
+	{
+		int width = jas_image_width(image);
+		int height = jas_image_height(image);
+		int x;
+		int y;
+		
+		/* exhausted the allocated pixel buffer */
+		if (gray >= (uint8_t*)dstEnd)
+		{
+			fprintf(stderr, "error: more images than expected\n");
+			abort();
+		}
+		
+		for (y = 0; y < height; ++y)
+		{
+			for (x = 0; x < width; ++x)
+			{
+				uint16_t v = jas_image_readcmptsample(image, cmp, x, y);
+				
+				v -= 0x8000;
+				
+				*gray = v; gray++;
+				*gray = v >> 8; gray++;
+			}
+		}
+	}
+	
+	/* cleanup */
+	jas_stream_close(stream);
+	jas_image_destroy(image);
+	
+	*dst = gray;
+}
 
 static void jasper_cleanup(void)
 {
@@ -144,13 +212,15 @@ static inline int AppendedData_parse(struct inv *inv)
 	}
 	
 	/* allocate memory for 16-bit image data for each image (7 components per JPC) */
-	inv->graySz = 2 * inv->grayWidth * inv->grayHeight * inv->grayJPC * 7;
+	inv->grayNum = inv->grayJPC * 7;
+	inv->graySz = 2 * inv->grayWidth * inv->grayHeight * inv->grayNum;
 	inv->gray = calloc(1, inv->graySz);
 	if (!inv->gray)
 	{
 		fprintf(stderr, "memory error\n");
 		return 1;
 	}
+	inv->grayEnd = ((uint8_t*)inv->gray) + inv->graySz;
 	
 	/* initialize libjasper */
 	if (jasper_begin())
@@ -160,70 +230,17 @@ static inline int AppendedData_parse(struct inv *inv)
 	}
 	
 	/* second pass: parse all the JPC containers using libjasper */
-	for (i = inv->grayNum = 0, gray = inv->gray, data = dataJPCblock; i < inv->grayJPC; data += grayJPCsz[i++])
 	{
-		jas_image_t *image;
-		jas_stream_t *stream;
-		unsigned cmp;
-		int fmt;
+		void *dst;
 		
-		/* open stream */
-		stream = jas_stream_memopen((void*)data, grayJPCsz[i]);
-		if (!stream)
+		/* parse each image */
+		for (i = 0, dst = inv->gray, data = dataJPCblock; i < inv->grayJPC; data += grayJPCsz[i++])
 		{
-			fprintf(stderr, "jas_stream_memopen error\n");
-			return 1;
-		}
-		
-		/* get image format */
-		if ((fmt = jas_image_getfmt(stream)) < 0)
-		{
-			fprintf(stderr, "jas_image_getfmt error\n");
-			return -1;
-		}
-		
-		/* decode stream to image */
-		if (!(image = jas_image_decode(stream, fmt, 0)))
-		{
-			fprintf(stderr, "jas_image_decode error\n");
-			return -1;
-		}
-		
-		/* get 16-bit grayscale pixel data for each component */
-		for (cmp = 0; cmp < jas_image_numcmpts(image); ++cmp, inv->grayNum++)
-		{
-			int width = jas_image_width(image);
-			int height = jas_image_height(image);
-			int x;
-			int y;
+			jpcLoadPixelsInto(&dst, data, grayJPCsz[i], inv->grayEnd);
 			
-			for (y = 0; y < height; ++y)
-			{
-				for (x = 0; x < width; ++x)
-				{
-					uint16_t v = jas_image_readcmptsample(image, cmp, x, y);
-					
-					v -= 0x8000;
-					
-					*gray = v; gray++;
-					*gray = v >> 8; gray++;
-				}
-			}
-			
-			/* exhausted the allocated pixel buffer */
-			if (gray > ((uint8_t*)inv->gray) + inv->graySz)
-			{
-				fprintf(stderr, "error: more images than expected\n");
-				return 1;
-			}
+			/* it can be slow, so I tossed this here to report progress */
+			fprintf(stdout, "%p\n", data);
 		}
-		
-		/* cleanup */
-		jas_stream_close(stream);
-		jas_image_destroy(image);
-		
-		/* it can be slow, so I tossed this here to report progress */
-		fprintf(stdout, "%p\n", data);
 	}
 	
 	/* cleanup libjasper */
