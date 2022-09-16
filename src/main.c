@@ -33,6 +33,7 @@ int main(int argc, char *argv[])
 	bool isBinary = false;
 	bool isSeries = false;
 	bool isThreaded = false;
+	bool showViewer = false;
 	int series_low;
 	int series_high;
 	int width;
@@ -50,6 +51,8 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "  optional arguments (these are the --options):\n");
 		fprintf(stderr, "    --threads\n");
 		fprintf(stderr, "        * enables multithreading (if available)\n");
+		fprintf(stderr, "    --viewer\n");
+		fprintf(stderr, "        * opens viewer window after loading data\n");
 		fprintf(stderr, "    --binary  W,H\n");
 		fprintf(stderr, "        * indicates input file is binary data\n");
 		fprintf(stderr, "          previously exported using the --dump option\n");
@@ -108,6 +111,10 @@ int main(int argc, char *argv[])
 		else if (!strcmp(this, "threads"))
 		{
 			isThreaded = true;
+		}
+		else if (!strcmp(this, "viewer"))
+		{
+			showViewer = true;
 		}
 		else if (!strcmp(this, "series"))
 		{
@@ -234,6 +241,7 @@ int main(int argc, char *argv[])
 		return -1;
 	
 	/* viewer */
+	if (showViewer)
 	{
 		int num = inv_get_num_images(inv);
 		int w = inv_get_width(inv);
@@ -249,7 +257,6 @@ int main(int argc, char *argv[])
 		uint16_t *pix = calloc(big * big, sizeof(*pix));
 		bool show_axis_guides = false;
 		
-	#if 1 /* valgrind exclude */
 		if (!(viewer = viewer_create(w, h, num)))
 			return -1;
 		for (;;)
@@ -466,18 +473,30 @@ int main(int argc, char *argv[])
 			viewer_show(viewer);
 		}
 		viewer_destroy(viewer);
-	#endif
-	#if 0 /* valgrind test */
+		free(pix);
+	}
+	
+	/* valgrind test */
+	#if 1
+	{
+		int num = inv_get_num_images(inv);
+		int w = inv_get_width(inv);
+		int h = inv_get_height(inv);
+		int big = max3(w, h, num);
+		uint16_t *pix = calloc(big * big, sizeof(*pix));
+		
 		for (int frame = 0; frame < big; ++frame)
 			inv_get_plane(inv, pix, frame, INV_PLANE_AXIAL);
 		for (int frame = 0; frame < big; ++frame)
 			inv_get_plane(inv, pix, frame, INV_PLANE_SAGITTAL);
 		for (int frame = 0; frame < big; ++frame)
 			inv_get_plane(inv, pix, frame, INV_PLANE_CORONAL);
+		
 		inv_make_8bit(pix, big, big);
-	#endif
+		
 		free(pix);
 	}
+	#endif
 	
 	/* cleanup */
 	inv_free(inv);
