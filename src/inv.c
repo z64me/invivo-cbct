@@ -1,9 +1,14 @@
+#ifdef WANT_THREADS
+#define JAS_FOR_JASPER_APP_USE_ONLY /* XXX expose libjasper's threading */
+#endif
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <limits.h>
 #include <math.h>
 #include <jasper/jasper.h>
 #include <base64.h>
@@ -11,6 +16,12 @@
 
 #include "inv.h"
 #include "common.h"
+
+/* fallback if no threading is available */
+#if defined(WANT_THREADS) && !defined(JAS_THREADS)
+#	warning JasPer was compiled without threads. Threading is not available.
+#	undef WANT_THREADS
+#endif
 
 struct inv
 {
@@ -30,6 +41,7 @@ struct inv
 	unsigned grayJPC; // number of JPC containers
 	int grayWidth; // dimensions of grayscale images
 	int grayHeight;
+	bool isThreaded; // is threading enabled
 };
 
 /* loads all raw pixel data from a JPC into a buffer */
@@ -99,20 +111,58 @@ static void jpcLoadPixelsInto(void **dst, void *src, uint32_t sz, void *dstEnd)
 	*dst = gray;
 }
 
+#ifdef WANT_THREADS
+struct jpcJob
+{
+	jas_thread_t thread;
+	void *outbuf;
+	void *outbufEnd;
+	void *data;
+	uint32_t sz;
+};
+
+static int jpcJob(void *handle)
+{
+	struct jpcJob *job = handle;
+	int result = 0;
+	
+	/* init thread */
+	if (jas_init_thread())
+	{
+		fprintf(stderr, "jas_init_thread error inside job\n");
+		return -1;
+	}
+	
+	/* process image */
+	jpcLoadPixelsInto(&job->outbuf, job->data, job->sz, job->outbufEnd);
+	
+	/* this reports progress */
+	fprintf(stdout, "%p\n", job->data);
+	
+	/* cleanup thread */
+	jas_cleanup_thread();
+	
+	return result;
+}
+#endif /* WANT_THREADS */
+
 static void jasper_cleanup(void)
 {
 	jas_cleanup_thread();
 	jas_cleanup_library();
 }
 
-static int jasper_begin(void)
+static int jasper_begin(bool isThreaded)
 {
 	static jas_std_allocator_t allocator;
 	
 	jas_conf_clear();
 	jas_std_allocator_init(&allocator);
 	jas_conf_set_allocator(&allocator.base);
-	jas_conf_set_max_mem_usage(1024 * 1024 * 1024 * 1); // 1 GiB
+	jas_conf_set_max_mem_usage(SIZE_MAX); // XXX threaded operations easily consume > 1 GiB memory
+	jas_conf_set_multithread(isThreaded);
+	jas_conf_set_vlogmsgf(jas_vlogmsgf_discard); // XXX silence warnings
+	jas_conf_set_debug_level(0);
 	
 	if (jas_init_library())
 	{
@@ -134,7 +184,6 @@ static inline int AppendedData_parse(struct inv *inv)
 	uint8_t *data;
 	uint8_t *dataStart;
 	uint8_t *dataJPCblock;
-	uint8_t *gray;
 	uint32_t *grayJPCsz;
 	size_t dataSz = inv->AppendedDataSz;
 	unsigned int i;
@@ -154,8 +203,8 @@ static inline int AppendedData_parse(struct inv *inv)
 	assert(grayJPCsz);
 	for (i = 0, data = dataStart + 4 * sizeof(uint32_t); i < inv->grayJPC; ++i, data += sizeof(uint32_t))
 		grayJPCsz[i] = LEu32(data);
-	for (i = 0; i < inv->grayJPC; ++i)
-		fprintf(stdout, "%08x\n", grayJPCsz[i]);
+	//for (i = 0; i < inv->grayJPC; ++i)
+	//	fprintf(stdout, "%08x\n", grayJPCsz[i]);
 	
 	/* the JPC block is located immediately after the header, which has a length
 	 * of four 32-bit words + an array of 32-bit words describing each JPC's size
@@ -223,16 +272,20 @@ static inline int AppendedData_parse(struct inv *inv)
 	inv->grayEnd = ((uint8_t*)inv->gray) + inv->graySz;
 	
 	/* initialize libjasper */
-	if (jasper_begin())
+	if (jasper_begin(inv->isThreaded))
 	{
 		fprintf(stderr, "libjasper error\n");
 		return 1;
 	}
 	
 	/* second pass: parse all the JPC containers using libjasper */
+	if (inv->isThreaded == false)
 	{
 		void *dst;
 		
+	#ifndef WANT_THREADS
+	L_nothreading:
+	#endif
 		/* parse each image */
 		for (i = 0, dst = inv->gray, data = dataJPCblock; i < inv->grayJPC; data += grayJPCsz[i++])
 		{
@@ -241,6 +294,57 @@ static inline int AppendedData_parse(struct inv *inv)
 			/* it can be slow, so I tossed this here to report progress */
 			fprintf(stdout, "%p\n", data);
 		}
+	}
+	else
+	{
+	#ifdef WANT_THREADS
+		struct jpcJob *job;
+		int jobNum = inv->grayJPC;
+		uint8_t *gray;
+		
+		/* init */
+		job = calloc(jobNum, sizeof(*job));
+		if (!job)
+		{
+			fprintf(stderr, "memory error\n");
+			return 1;
+		}
+		
+		/* spin up a thread for each image */
+		for (i = 0, gray = inv->gray, data = dataJPCblock; i < inv->grayJPC; data += grayJPCsz[i++])
+		{
+			struct jpcJob *thisjob = &job[i];
+			
+			thisjob->outbuf = gray + inv->grayWidth * inv->grayHeight * 2 * 7 * i;
+			thisjob->outbufEnd = inv->grayEnd;
+			thisjob->data = data;
+			thisjob->sz = grayJPCsz[i];
+			
+			if (jas_thread_create(&thisjob->thread, jpcJob, thisjob))
+			{
+				fprintf(stderr, "jas_thread_create error\n");
+				return 1;
+			}
+		}
+		
+		/* wait on threads to finish */
+		for (i = 0; i < inv->grayJPC; ++i)
+		{
+			int result;
+			
+			if (jas_thread_join(&job[i].thread, &result) || result)
+			{
+				fprintf(stderr, "jas_thread_join error on job %d\n", i);
+				return 1;
+			}
+		}
+		
+		/* cleanup jobs */
+		free(job);
+	#else
+		fprintf(stderr, "Warning: Threading is not available. Falling back to slow mode.\n");
+		goto L_nothreading;
+	#endif
 	}
 	
 	/* cleanup libjasper */
@@ -362,7 +466,7 @@ void inv_free(struct inv *inv)
 	free(inv);
 }
 
-struct inv *inv_parse(const void *src, size_t srcSz)
+struct inv *inv_parse(const void *src, size_t srcSz, bool isThreaded)
 {
 	struct inv *inv;
 	void *data;
@@ -375,6 +479,7 @@ struct inv *inv_parse(const void *src, size_t srcSz)
 	if (!(inv->data = data = memduppad(src, srcSz, 1)))
 		goto L_fail;
 	inv->dataSz = dataSz = srcSz;
+	inv->isThreaded = isThreaded;
 	
 	/* find, copy, and strip AppendedData
 	 * XXX this should take place BEFORE parsing as XML because
@@ -430,7 +535,7 @@ L_fail:
 	return 0;
 }
 
-struct inv *inv_load(const char *fn)
+struct inv *inv_load(const char *fn, bool isThreaded)
 {
 	struct inv *inv;
 	void *data;
@@ -444,7 +549,7 @@ struct inv *inv_load(const char *fn)
 	}
 	
 	/* parse inv file */
-	if (!(inv = inv_parse(data, dataSz)))
+	if (!(inv = inv_parse(data, dataSz, isThreaded)))
 	{
 		fprintf(stderr, "failed to parse invivo file '%s'\n", fn);
 		return 0;
@@ -909,7 +1014,7 @@ int inv_write(struct inv *inv, const char *outfn, const char *firstname, const c
 	PrefixedBase64(WatermarkBin, Watermark);
 	
 	/* initialize libjasper */
-	if (jasper_begin())
+	if (jasper_begin(false))
 	{
 		fprintf(stderr, "libjasper error\n");
 		return 1;

@@ -32,6 +32,7 @@ int main(int argc, char *argv[])
 	struct inv *inv;
 	bool isBinary = false;
 	bool isSeries = false;
+	bool isThreaded = false;
 	int series_low;
 	int series_high;
 	int width;
@@ -47,6 +48,8 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "args: %s --options invivo.inv\n", progname);
 		fprintf(stderr, "  the input file is always the last argument;\n");
 		fprintf(stderr, "  optional arguments (these are the --options):\n");
+		fprintf(stderr, "    --threads\n");
+		fprintf(stderr, "        * enables multithreading (if available)\n");
 		fprintf(stderr, "    --binary  W,H\n");
 		fprintf(stderr, "        * indicates input file is binary data\n");
 		fprintf(stderr, "          previously exported using the --dump option\n");
@@ -101,6 +104,10 @@ int main(int argc, char *argv[])
 			isBinary = true;
 			
 			i += 1;
+		}
+		else if (!strcmp(this, "threads"))
+		{
+			isThreaded = true;
 		}
 		else if (!strcmp(this, "series"))
 		{
@@ -210,7 +217,7 @@ int main(int argc, char *argv[])
 	}
 	else
 	{
-		if (!(inv = inv_load(fn)))
+		if (!(inv = inv_load(fn, isThreaded)))
 			return -1;
 	}
 	

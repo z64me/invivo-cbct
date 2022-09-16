@@ -1,6 +1,8 @@
 #ifndef INV_H_INCLUDED
 #define INV_H_INCLUDED
 
+#include <stdbool.h>
+
 struct inv;
 
 enum inv_plane
@@ -19,8 +21,8 @@ const void *inv_get_plane(struct inv *inv, void *dst, int image, enum inv_plane 
 const void *inv_get_gray(struct inv *inv, int *w, int *h, int *num);
 int inv_dump(struct inv *inv, const char *fn);
 int inv_dump_pointcloud(struct inv *inv, const char *fn, int minv, int maxv, float density);
-struct inv *inv_parse(const void *src, size_t srcSz);
-struct inv *inv_load(const char *fn);
+struct inv *inv_parse(const void *src, size_t srcSz, bool isThreaded);
+struct inv *inv_load(const char *fn, bool isThreaded);
 struct inv *inv_load_binary(const char *fn, int w, int h);
 struct inv *inv_load_series(const char *pattern, int start, int end);
 void inv_free(struct inv *inv);
