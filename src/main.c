@@ -18,6 +18,23 @@ static int max3(int a, int b, int c)
 	return max2(max2(a, b), c);
 }
 
+/* convert yyyymmdd -> yyyy/mm/dd format */
+static const char *formatdate(const char *yyyymmdd)
+{
+	static char output[1024];
+	const char *y = yyyymmdd + 0;
+	const char *m = yyyymmdd + 4;
+	const char *d = yyyymmdd + 6;
+	
+	/* string validation */
+	if (!yyyymmdd || strlen(yyyymmdd) != 8)
+		return "";
+	
+	snprintf(output, sizeof(output), "%.4s/%.2s/%.2s", y, m, d);
+	
+	return output;
+}
+
 int main(int argc, char *argv[])
 {
 	struct viewer *viewer = 0;
@@ -352,10 +369,10 @@ int main(int argc, char *argv[])
 					/* patient info */
 					x += indent;
 					{
-						y += viewer_label(viewer, "Hello, world!", x, y);
-						if (viewer_button(viewer, "Test Button", x, y))
-							fprintf(stderr, "Test Button\n");
-						y += h;
+						viewer_label(viewer, formatdate(inv_get_imagedate(inv)), x + 180, y - h);
+						y += viewer_label(viewer, inv_get_patient_name(inv), x, y);
+						y += viewer_label(viewer, formatdate(inv_get_patient_birthday(inv)), x, y);
+						y += viewer_label(viewer, inv_get_watermark(inv), x, y);
 					}
 					x -= indent;
 					

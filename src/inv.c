@@ -31,6 +31,10 @@ struct inv
 	/* xml vars */
 	void *AppendedData;
 	size_t AppendedDataSz;
+	char PatientName[512];
+	char PatientBirthday[512];
+	char Watermark[512];
+	char ImageDate[512];
 	
 	/* AppendedData contents */
 	void *gray; // 16-bit grayscale image strip
@@ -145,6 +149,87 @@ static int jpcJob(void *handle)
 	return result;
 }
 #endif /* WANT_THREADS */
+
+/* gets the inner value of an XML element
+ * returns dst on success
+ * returns 0 on failure
+ */
+static char *xml_get_inner(char *dst, int dstSz, const char *src)
+{
+	const char *begin;
+	const char *end;
+	int len;
+	
+	assert(dst);
+	assert(src);
+	
+	/* clear destination buffer in case nothing is found */
+	memset(dst, 0, dstSz);
+	
+	/* beginning and end of the relevant block */
+	if (!(begin = strchr(src, '"')))
+		return 0;
+	if (!(end = strchr(begin + 1, '"')))
+		return 0;
+	
+	/* copy inner contents */
+	len = end - begin;
+	if (len > dstSz)
+		len = dstSz;
+	len -= 1;
+	memcpy(dst, begin + 1, len);
+	
+	return dst;
+}
+
+/* hacky XML value finder so I don't have to include a whole XML library */
+static void xml_get_inv_value(char *dst, int dstSz, const char *tag, const char *src)
+{
+	const char *begin;
+	const char *end;
+	const char *mat;
+	
+	assert(dst);
+	assert(dstSz > 0);
+	assert(tag);
+	assert(src);
+	
+	/* clear destination buffer in case nothing is found */
+	memset(dst, 0, dstSz);
+	
+	/* beginning and end of the relevant block */
+	if (!(begin = strstr(src, tag)))
+		return;
+	if (!(end = strstr(begin + 1, tag)))
+		return;
+	
+	/* prioritize 'BinaryValue' field */
+	if (((mat = strstr(begin, "BinaryValue")) && mat < end))
+	{
+		char *endstr;
+		int n;
+		
+		/* get base64, decode to string, append terminator */
+		xml_get_inner(dst, dstSz, mat);
+		endstr = b64decode(dst);
+		*endstr = '\0';
+		
+		/* 'BinaryValue' string begins with a 4-byte length */
+		n = LEu32(dst);
+		if (n)
+			memmove(dst, dst + 4, n + 1);
+		
+		return;
+	}
+	
+	/* fall back to 'Value' field */
+	if (((mat = strstr(begin, "Value")) && mat < end))
+	{
+		/* get string */
+		xml_get_inner(dst, dstSz, mat);
+		return;
+	}
+}
 
 static void jasper_cleanup(void)
 {
@@ -526,6 +611,27 @@ struct inv *inv_parse(const void *src, size_t srcSz, bool isThreaded)
 		
 		/* strip */
 		memmove(start, end, strlen(end) + 1);
+	}
+	
+	/* parse remaining XML values */
+	{
+		char *mat;
+		
+		/* retrieve */
+		xml_get_inv_value(inv->PatientName, sizeof(inv->PatientName), "PatientName", inv->data);
+		xml_get_inv_value(inv->PatientBirthday, sizeof(inv->PatientBirthday), "PatientBirthDay", inv->data);
+		xml_get_inv_value(inv->Watermark, sizeof(inv->Watermark), "PatientSex", inv->data);
+		xml_get_inv_value(inv->ImageDate, sizeof(inv->ImageDate), "ImageDate", inv->data);
+		
+		/* convert 'Last^First' -> 'Last,First' format */
+		if ((mat = strchr(inv->PatientName, '^')))
+			*mat = ',';
+		
+		/* debug output */
+		fprintf(stdout, "PatientName = '%s'\n", inv->PatientName);
+		fprintf(stdout, "PatientBirthday = '%s'\n", inv->PatientBirthday);
+		fprintf(stdout, "Watermark = '%s'\n", inv->Watermark);
+		fprintf(stdout, "ImageDate = '%s'\n", inv->ImageDate);
 	}
 	
 	return inv;
@@ -1149,4 +1255,32 @@ int inv_write(struct inv *inv, const char *outfn, const char *firstname, const c
 	
 	/* success */
 	return 0;
+}
+
+const char *inv_get_patient_name(struct inv *inv)
+{
+	assert(inv);
+	
+	return inv->PatientName;
+}
+
+const char *inv_get_patient_birthday(struct inv *inv)
+{
+	assert(inv);
+	
+	return inv->PatientBirthday;
+}
+
+const char *inv_get_watermark(struct inv *inv)
+{
+	assert(inv);
+	
+	return inv->Watermark;
+}
+
+const char *inv_get_imagedate(struct inv *inv)
+{
+	assert(inv);
+	
+	return inv->ImageDate;
 }

@@ -27,5 +27,9 @@ struct inv *inv_load_binary(const char *fn, int w, int h);
 struct inv *inv_load_series(const char *pattern, int start, int end);
 void inv_free(struct inv *inv);
 int inv_write(struct inv *inv, const char *outfn, const char *firstname, const char *lastname, const char *dob);
+const char *inv_get_patient_name(struct inv *inv);
+const char *inv_get_patient_birthday(struct inv *inv);
+const char *inv_get_watermark(struct inv *inv);
+const char *inv_get_imagedate(struct inv *inv);
 
 #endif /* INV_H_INCLUDED */
