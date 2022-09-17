@@ -6,5 +6,6 @@
 int palette_count(void);
 void palette_color(uint8_t dst[3], int palette, int index);
 const char *palette_name(int palette);
+int palette_find(const char *name);
 
 #endif /* PALETTE_H_INCLUDED */

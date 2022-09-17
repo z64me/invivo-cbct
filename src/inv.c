@@ -16,6 +16,7 @@
 
 #include "inv.h"
 #include "common.h"
+#include "palette.h"
 
 /* fallback if no threading is available */
 #if defined(WANT_THREADS) && !defined(JAS_THREADS)
@@ -873,7 +874,7 @@ void *inv_make_8bit(void *pixels16bit, int w, int h)
 }
 
 /* dump inv to point cloud (Stanford .ply) */
-int inv_dump_pointcloud(struct inv *inv, const char *fn, int minv, int maxv, float density)
+int inv_dump_pointcloud(struct inv *inv, const char *fn, int minv, int maxv, int palette, float density)
 {
 	FILE *fp;
 	uint16_t *pix16;
@@ -987,6 +988,8 @@ int inv_dump_pointcloud(struct inv *inv, const char *fn, int minv, int maxv, flo
 				for (x = 0; x < w; x += density)
 				{
 					int v = pix8[(int)floor(y) * w + (int)floor(x)];
+					uint8_t rgb[] = {v, v, v};
+					int a = v;
 					
 					/* skip pixels with values out of desired range */
 					if (v < minv || v > maxv)
@@ -1021,8 +1024,12 @@ int inv_dump_pointcloud(struct inv *inv, const char *fn, int minv, int maxv, flo
 						v <<= 4;
 					}
 					
+					/* palette */
+					if (palette >= 0)
+						palette_color(rgb, palette, v);
+					
 					/* x y z r g b a */
-					fprintf(fp, "%f %f %f %d %d %d %d\n", x, y, z, v, v, v, v);
+					fprintf(fp, "%f %f %f %d %d %d %d\n", x, y, z, rgb[0], rgb[1], rgb[2], a);
 					numv += 1;
 				}
 			}

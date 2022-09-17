@@ -58,6 +58,7 @@ int main(int argc, char *argv[])
 	int points_minv = 0;
 	int points_maxv = 0;
 	float points_density = 0;
+	int points_palette = -1;
 	int i;
 	
 	/* show arguments */
@@ -88,17 +89,20 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "        * specifies output binary file to create;\n");
 		fprintf(stderr, "        * the file will contain a series of raw images\n");
 		fprintf(stderr, "          stored in 16-bit unsigned little-endian format\n");
-		fprintf(stderr, "    --points  out.ply min,max,density\n");
+		fprintf(stderr, "    --points  out.ply min,max,palette,density\n");
 		fprintf(stderr, "        * specifies output point cloud file to create;\n");
 		fprintf(stderr, "        * the file will be a Stanford .ply containing a series\n");
 		fprintf(stderr, "          of vertices in xyzrgba format\n");
 		fprintf(stderr, "        * writes only points w/ shades in value range [min,max];\n");
 		fprintf(stderr, "          min/max are expected to be in the range [0,255]\n");
+		fprintf(stderr, "        * palette is the name of a palette from the viewer options,\n");
+		fprintf(stderr, "          but without spaces (e.g. Jet or GreenFireBlue);\n");
+		fprintf(stderr, "          ('None' indicates no palette (aka gray));\n");
 		fprintf(stderr, "        * density is expected to be in range 0.0 < n <= 1.0,\n");
 		fprintf(stderr, "          but if no value is specified, density is adaptive,\n");
 		fprintf(stderr, "          where brighter pixel clusters are assumed to be denser\n");
 		fprintf(stderr, "          (XXX adaptive density is experimental; don't use it)\n");
-		fprintf(stderr, "        * e.g. --points out.ply 20,255,0.25\n");
+		fprintf(stderr, "        * e.g. --points out.ply 20,255,None,0.25\n");
 		return -1;
 	}
 	
@@ -175,19 +179,20 @@ int main(int argc, char *argv[])
 		}
 		else if (!strcmp(this, "points"))
 		{
+			char palname[1024];
 			const char *extra = argv[i + 2];
 			int got;
 			
 			points = next;
 			
-			got = sscanf(extra, "%d,%d,%f", &points_minv, &points_maxv, &points_density);
+			got = sscanf(extra, "%d,%d,%[^,],%f", &points_minv, &points_maxv, palname, &points_density);
 			
 			/* density is optional; if not specified, use adaptive density */
-			if (got == 2)
+			if (got == 3)
 				points_density = 0;
 			
 			/* not enough parameters */
-			if (got < 2)
+			if (got < 3)
 			{
 			L_points_fail:
 				fprintf(stderr, "argument '%s %s %s' malformatted\n", this, next, extra);
@@ -208,6 +213,11 @@ int main(int argc, char *argv[])
 			if (got > 2 && (points_density <= 0 || points_density > 1))
 			{
 				fprintf(stderr, "density bad value, expected value 0.0 < n <= 1.0\n");
+				goto L_points_fail;
+			}
+			if ((points_palette = palette_find(palname)) < -1)
+			{
+				fprintf(stderr, "unknown palette '%s'\n", palname);
 				goto L_points_fail;
 			}
 			
@@ -250,7 +260,7 @@ int main(int argc, char *argv[])
 		return -1;
 	
 	/* dump inv file to point cloud */
-	if (points && inv_dump_pointcloud(inv, points, points_minv, points_maxv, points_density))
+	if (points && inv_dump_pointcloud(inv, points, points_minv, points_maxv, points_palette, points_density))
 		return -1;
 	
 	/* write Invivo .inv file */
