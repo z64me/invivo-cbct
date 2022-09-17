@@ -113,9 +113,8 @@ int main(int argc, char *argv[])
 		const char *next = argv[i + 1];
 		
 		/* arguments start with -- */
-		if (strlen(this) < 2)
-			goto L_unknown;
-		this += 2;
+		if (strlen(this) >= 2 && !memcmp(this, "--", 2))
+			this += 2;
 		
 		if (!strcmp(this, "binary"))
 		{
@@ -225,7 +224,6 @@ int main(int argc, char *argv[])
 		}
 		else
 		{
-		L_unknown:
 			fprintf(stderr, "unknown argument '%s'\n", this);
 			return -1;
 		}
