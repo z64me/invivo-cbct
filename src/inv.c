@@ -1177,7 +1177,7 @@ int inv_write(struct inv *inv, const char *outfn, const char *firstname, const c
 	
 	/* write XML part */
 	fprintf(fp, "<INVFile version='2.0' byteOrder='LittleEndian'>\n");
-		fprintf(fp, "<CaseInfo SampleFileName=\"Hello! This file was produced by invivo-cbct, an open-source project that can be found on GitHub! Stop by my website sometime at www.holland.vg!\">\n");
+		fprintf(fp, "<CaseInfo SampleFileName=\"www.holland.vg\">\n");
 			fprintf(fp, "<IdentifyInfo GroupID=\"8\">\n");
 				fprintf(fp, "<ImageType ElementID=\"8\" Value=\"ORIGINAL\\PRIMARY\\AXIAL\"></ImageType>\n");
 				fprintf(fp, "<ImageDate ElementID=\"35\" Value=\"%s\"></ImageDate>\n", currentDate);
