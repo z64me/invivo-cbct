@@ -8,6 +8,9 @@
 #include "viewer.h"
 #include "palette.h"
 
+/* XXX this was added only for creating animated GIFs */
+int global_image_index = 0;
+
 static int max2(int a, int b)
 {
 	return a > b ? a : b;
@@ -326,6 +329,9 @@ int main(int argc, char *argv[])
 				if (where[i] == where_last[i])
 					continue;
 				where_last[i] = where[i];
+				
+				/* write every nth frame */
+				global_image_index = !(where[i] % 7) ? where[i] : -1;
 				
 				viewer_get_dim(viewer, i, &w, &h);
 				inv_get_plane(inv, pix, where[i], i);

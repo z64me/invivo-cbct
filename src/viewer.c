@@ -353,6 +353,48 @@ void viewer_upload_pixels(struct viewer *v, const void *src, int srcW, int srcH,
 		}
 	}
 	
+#ifdef WRITE_FRAMES
+	/* XXX this was added in an ad hoc manner so I could make animated GIFs;
+	 *     if you for some reason want to use this, add -DWRITE_FRAMES to the compiler flags
+	 */
+	if (idx == 0)
+	{
+		#include <stb_image_write.h>
+		
+		/* platform-specific byteswapping shenanigans */
+		#define BYTESWAP_IMAGE \
+		for (i = 0, dst32 = dst, dst8 = dst; i < srcW * srcH; ++i, ++dst32, dst8 += 4) \
+			*dst32 = (dst8[0] << 24) | (dst8[1] << 16) | (dst8[2] << 8) | dst8[3];
+		
+		extern int global_image_index;
+		static int palette = -999;
+		static uint8_t has_written[1024];
+		char fn[1024];
+		uint32_t *dst32;
+		
+		if (palette != v->palette)
+		{
+			palette = v->palette;
+			memset(has_written, 0, sizeof(has_written));
+		}
+		
+		if (global_image_index >= 0
+			&& global_image_index < (int)(sizeof(has_written) / sizeof(*has_written))
+			&& has_written[global_image_index] == false
+		)
+		{
+			has_written[global_image_index] = true;
+			
+			BYTESWAP_IMAGE
+			
+			snprintf(fn, sizeof(fn), "bin/image-out/%d.png", global_image_index);
+			stbi_write_png(fn, srcW, srcH, 4, dst, 0);
+			
+			BYTESWAP_IMAGE
+		}
+	}
+#endif
+	
 	SDL_UnlockTexture(tex);
 }
 
