@@ -455,6 +455,26 @@ int inv_get_height(struct inv *inv)
 	return inv->grayHeight;
 }
 
+/* allocates and returns a new inv populated with some default values */
+static struct inv *inv_new(void)
+{
+	struct inv *inv = calloc(1, sizeof(*inv));
+	
+	if (!inv)
+	{
+		fprintf(stderr, "memory error\n");
+		return 0;
+	}
+	
+	/* patient info set to 'unset' by default */
+	strcpy(inv->PatientName, "unset");
+	strcpy(inv->PatientBirthday, "unset");
+	strcpy(inv->Watermark, "unset");
+	strcpy(inv->ImageDate, "unset");
+	
+	return inv;
+}
+
 const void *inv_get_frame(struct inv *inv, unsigned image)
 {
 	assert(inv);
@@ -558,7 +578,7 @@ struct inv *inv_parse(const void *src, size_t srcSz, bool isThreaded)
 	void *data;
 	size_t dataSz;
 	
-	if (!(inv = calloc(1, sizeof(*inv))))
+	if (!(inv = inv_new()))
 		return 0;
 	
 	/* make a copy of the provided data */
@@ -712,7 +732,7 @@ struct inv *inv_load_binary(const char *fn, int w, int h)
 {
 	struct inv *inv;
 	
-	if (!(inv = calloc(1, sizeof(*inv))))
+	if (!(inv = inv_new()))
 		goto L_fail;
 	
 	/* load binary file */
@@ -752,7 +772,7 @@ struct inv *inv_load_series(const char *pattern, int start, int end)
 	int direction = end > start ? 1 : -1;
 	int i;
 	
-	if (!(inv = calloc(1, sizeof(*inv))))
+	if (!(inv = inv_new()))
 		goto L_fail;
 	
 	/* pad to be multiple of components per JPC container */
