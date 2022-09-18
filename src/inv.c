@@ -47,6 +47,7 @@ struct inv
 	int grayWidth; // dimensions of grayscale images
 	int grayHeight;
 	bool isThreaded; // is threading enabled
+	int cmpno;
 };
 
 /* loads all raw pixel data from a JPC into a buffer */
@@ -273,6 +274,7 @@ static inline int AppendedData_parse(struct inv *inv)
 	uint32_t *grayJPCsz;
 	size_t dataSz = inv->AppendedDataSz;
 	unsigned int i;
+	int cmpnoLast;
 	
 	assert(inv);
 	assert(inv->AppendedData);
@@ -282,6 +284,8 @@ static inline int AppendedData_parse(struct inv *inv)
 	
 	/* number of JPC containers */
 	inv->grayJPC = LEu32(dataStart + 4);
+	inv->cmpno = LEu32(dataStart + 8);
+	cmpnoLast = LEu32(dataStart + 12);
 	assert(inv->grayJPC);
 	
 	/* and their sizes */
@@ -303,8 +307,8 @@ static inline int AppendedData_parse(struct inv *inv)
 	 * {
 	 *    uint32_t magic;     // 0x2020205F aka string "   _" (magic value?)
 	 *    uint32_t num;       // (LE) number of JPC containers
-	 *    uint32_t cmpnum;    // (LE) number of components per container?
-	 *    uint32_t unk;       // (LE?) (unknown; equals cmpnum - 1 in my CBCT)
+	 *    uint32_t cmpnum;    // (LE) number of components per container
+	 *    uint32_t lastcnum;  // (LE) number of components in last container
 	 *    uint32_t size[num]; // (LE) filesize of each JPC file
 	 * };
 	 * 
@@ -346,8 +350,8 @@ static inline int AppendedData_parse(struct inv *inv)
 		}
 	}
 	
-	/* allocate memory for 16-bit image data for each image (7 components per JPC) */
-	inv->grayNum = inv->grayJPC * 7;
+	/* allocate memory for 16-bit image data for each image */
+	inv->grayNum = (inv->grayJPC - 1) * inv->cmpno + cmpnoLast;
 	inv->graySz = 2 * inv->grayWidth * inv->grayHeight * inv->grayNum;
 	inv->gray = calloc(1, inv->graySz);
 	if (!inv->gray)
@@ -401,7 +405,7 @@ static inline int AppendedData_parse(struct inv *inv)
 		{
 			struct jpcJob *thisjob = &job[i];
 			
-			thisjob->outbuf = gray + inv->grayWidth * inv->grayHeight * 2 * 7 * i;
+			thisjob->outbuf = gray + inv->grayWidth * inv->grayHeight * 2 * inv->cmpno * i;
 			thisjob->outbufEnd = inv->grayEnd;
 			thisjob->data = data;
 			thisjob->sz = grayJPCsz[i];
@@ -471,6 +475,9 @@ static struct inv *inv_new(void)
 	strcpy(inv->PatientBirthday, "unset");
 	strcpy(inv->Watermark, "unset");
 	strcpy(inv->ImageDate, "unset");
+	
+	/* components */
+	inv->cmpno = 7;
 	
 	return inv;
 }
@@ -720,7 +727,7 @@ int inv_dump(struct inv *inv, const char *fn)
 		// write entire image sequence:
 		fwrite(inv->gray, 1, inv->graySz, test);
 		// write only first frame of 10th JPC in file (the dimensions assume my dental CBCT):
-		//fwrite(((uint8_t*)inv->gray) + 10 * 7 * 536 * 536 * 2, 1, 536 * 536 * 2, test);
+		//fwrite(((uint8_t*)inv->gray) + 10 * inv->cmpno * 536 * 536 * 2, 1, 536 * 536 * 2, test);
 		fclose(test);
 	}*/
 	
@@ -765,7 +772,6 @@ struct inv *inv_load_series(const char *pattern, int start, int end)
 {
 	struct inv *inv = 0;
 	uint8_t *gray = 0;
-	const int components = 7;
 	int low = start < end ? start : end;
 	int high = end > start ? end : start;
 	int num = (high - low) + 1;
@@ -774,10 +780,6 @@ struct inv *inv_load_series(const char *pattern, int start, int end)
 	
 	if (!(inv = inv_new()))
 		goto L_fail;
-	
-	/* pad to be multiple of components per JPC container */
-	if (num % components)
-		num = ((num / components) + 1) * components;
 	
 	/* load every image */
 	for (i = start; i != end + direction; i += direction)
@@ -1122,6 +1124,8 @@ int inv_write(struct inv *inv, const char *outfn, const char *firstname, const c
 	char WatermarkBin[1024];
 	size_t grayJPCszOff;
 	uint32_t *grayJPCsz = 0;
+	int cmpnoLast;
+	int imgrem; // remaining images to write
 	
 	assert(inv);
 	assert(outfn);
@@ -1162,14 +1166,12 @@ int inv_write(struct inv *inv, const char *outfn, const char *firstname, const c
 	
 	/* prepare these for later */
 	gray = inv->gray;
-	containerNum = inv->grayNum / 7;
-	
-	/* complain if not multiple of 7 */
-	if (inv->grayNum % 7)
-	{
-		fprintf(stderr, "aborting: series contains %d images (not a multiple of 7)\n", inv->grayNum);
-		return 1;
-	}
+	for (containerNum = 0; containerNum * inv->cmpno < (int)inv->grayNum; )
+		++containerNum;
+	cmpnoLast = inv->grayNum % inv->cmpno;
+	if (cmpnoLast == 0)
+		cmpnoLast = inv->cmpno;
+	imgrem = inv->grayNum;
 	
 	/* allocate space for size of each JPC container */
 	grayJPCsz = calloc(containerNum, sizeof(*grayJPCsz));
@@ -1195,8 +1197,8 @@ int inv_write(struct inv *inv, const char *outfn, const char *firstname, const c
 	
 	/* write AppendedData header */
 	fputLEu32(containerNum, fp);
-	fputLEu32(7, fp);
-	fputLEu32(6, fp);
+	fputLEu32(inv->cmpno, fp);
+	fputLEu32(cmpnoLast, fp);
 	grayJPCszOff = ftell(fp); // takes note of where the JPC size table lives
 	for (i = 0; i < containerNum; ++i)
 		fputLEu32(0, fp);
@@ -1204,7 +1206,7 @@ int inv_write(struct inv *inv, const char *outfn, const char *firstname, const c
 	/* close file for now */
 	fclose(fp);
 	
-	/* for each collection of 7 images in series */
+	/* for each collection of images in series */
 	for (i = 0; i < containerNum; ++i)
 	{
 		jas_image_t *image = jas_image_create(0, 0, JAS_CLRSPC_SRGB);
@@ -1220,16 +1222,19 @@ int inv_write(struct inv *inv, const char *outfn, const char *firstname, const c
 		};
 		jas_stream_t *out = jas_stream_fopen(outfn, "ab+");
 		int cmp;
+		int cmpno = imgrem >= inv->cmpno ? inv->cmpno : imgrem;
+		
+		assert(imgrem > 0);
 		
 		/* report progress */
 		fprintf(stderr, "%d / %d\n", i + 1, containerNum);
 		
 		/* add empty components to image */
-		for (cmp = 0; cmp < 7; ++cmp)
+		for (cmp = 0; cmp < cmpno; ++cmp)
 			jas_image_addcmpt(image, cmp, &tmp);
 		
 		/* populate pixels across each component */
-		for (cmp = 0; cmp < 7; ++cmp)
+		for (cmp = 0; cmp < cmpno; ++cmp, --imgrem)
 		{
 			int width = jas_image_width(image);
 			int height = jas_image_height(image);
@@ -1261,6 +1266,8 @@ int inv_write(struct inv *inv, const char *outfn, const char *firstname, const c
 		jas_stream_close(out);
 		jas_image_destroy(image);
 	}
+	
+	assert(imgrem == 0);
 	
 	/* write the XML footer */
 	fp = fopen(outfn, "rb+");
