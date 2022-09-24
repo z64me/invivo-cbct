@@ -284,6 +284,8 @@ int main(int argc, char *argv[])
 		int palette = -1;
 		uint16_t *pix = calloc(big * big, sizeof(*pix));
 		bool show_axis_guides = false;
+		int threshold_min = 0;
+		int threshold_max = 255;
 		
 		if (!(viewer = viewer_create(w, h, num)))
 			return -1;
@@ -335,7 +337,7 @@ int main(int argc, char *argv[])
 				
 				viewer_get_dim(viewer, i, &w, &h);
 				inv_get_plane(inv, pix, where[i], i);
-				inv_make_8bit(pix, w, h);
+				inv_make_8bit(pix, w, h, threshold_min, threshold_max);
 				viewer_upload_pixels(viewer, pix, w, h, i);
 			}
 			
@@ -496,6 +498,47 @@ int main(int argc, char *argv[])
 								show_axis_guides = !show_axis_guides;
 						}
 						y += viewer_label(viewer, "Show Axis Guides", x + 24, y) + pad;
+						
+						/* threshold */
+						{
+							char buf[16];
+							int onew = w / 2;
+							int offx = 16;
+							int min_old = threshold_min;
+							int max_old = threshold_max;
+							
+							/* header + reset button */
+							viewer_label(viewer, "Threshold", x, y);
+							if (viewer_button(viewer, "Reset", x + 200, y))
+								threshold_min = 0, threshold_max = 255;
+							y += h + pad;
+							
+							/* indented sliders */
+							x += indent;
+							{
+								viewer_slider_int(viewer, x, y, onew, &threshold_min, 0, 255);
+								snprintf(buf, sizeof(buf), "min: %d", threshold_min);
+								viewer_label_inverted(viewer, buf, x + offx, y);
+								
+								/* second slider is to the right */
+								x += onew + offx;
+								{
+									viewer_slider_int(viewer, x, y, onew, &threshold_max, 0, 255);
+									snprintf(buf, sizeof(buf), "max: %d", threshold_max);
+									viewer_label_inverted(viewer, buf, x + offx, y);
+								}
+								x -= onew + offx;
+							}
+							x -= indent;
+							
+							/* next row */
+							y += h + pad;
+							
+							/* on change, queue refresh */
+							if (threshold_min != min_old || threshold_max != max_old)
+								for (p = 0; p < INV_PLANE_NUM; ++p)
+									where_last[p] = -1;
+						}
 					}
 					x -= indent;
 				}
@@ -523,7 +566,7 @@ int main(int argc, char *argv[])
 		for (int frame = 0; frame < big; ++frame)
 			inv_get_plane(inv, pix, frame, INV_PLANE_CORONAL);
 		
-		inv_make_8bit(pix, big, big);
+		inv_make_8bit(pix, big, big, 0, 255);
 		
 		free(pix);
 	}

@@ -7,8 +7,8 @@
 #include "palette.h"
 
 #define WINDOW_NAME "Invivo CBCT Viewer"
-#define VP_W 300 // a single quadrant
-#define VP_H 300
+#define VP_W 325 // a single quadrant
+#define VP_H 325
 #define BUF_NUM  3
 #define TEXT_PAD 4
 

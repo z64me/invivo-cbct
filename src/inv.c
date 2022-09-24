@@ -861,7 +861,7 @@ L_fail:
 }
 
 /* convert 16-bit pixel data to color-corrected 8-bit pixel data */
-void *inv_make_8bit(void *pixels16bit, int w, int h)
+void *inv_make_8bit(void *pixels16bit, int w, int h, int threshold_min, int threshold_max)
 {
 	uint8_t *src = pixels16bit;
 	uint8_t *dst = pixels16bit;
@@ -890,6 +890,12 @@ void *inv_make_8bit(void *pixels16bit, int w, int h)
 		/* final 8-bit grayscale shade */
 		conv *= 255;
 		*dst = conv;
+		
+		/* clamp to thresholds */
+		if (*dst < threshold_min)
+			*dst = 0;
+		else if (*dst > threshold_max)
+			*dst = 0;
 	}
 	
 	return pixels16bit;
@@ -1002,7 +1008,7 @@ int inv_dump_pointcloud(struct inv *inv, const char *fn, int minv, int maxv, int
 		{
 			/* get pixels and convert to 8-bit (value range [0,255]) */
 			inv_get_plane(inv, pix16, (int)floor(z), INV_PLANE_AXIAL);
-			pix8 = inv_make_8bit(pix16, w, h);
+			pix8 = inv_make_8bit(pix16, w, h, minv, maxv);
 			
 			/* for every pixel in image */
 			for (y = 0; y < h; y += density)
