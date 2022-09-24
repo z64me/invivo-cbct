@@ -7,8 +7,6 @@
 #include "palette.h"
 
 #define WINDOW_NAME "Invivo CBCT Viewer"
-#define VP_W 325 // a single quadrant
-#define VP_H 325
 #define BUF_NUM  3
 #define TEXT_PAD 4
 
@@ -59,6 +57,8 @@ struct viewer
 		int quad;
 		bool active;
 	} grab_axis;
+	int vp_w; // dimensions of a single quadrant
+	int vp_h;
 };
 
 /* private function prototypes */
@@ -142,13 +142,13 @@ void viewer_get_quadrant(struct viewer *v, int x, int y, int *ul_x, int *ul_y)
 	assert(v);
 	
 	if (ul_x)
-		*ul_x = x * VP_W + TEXT_PAD;
+		*ul_x = x * v->vp_w + TEXT_PAD;
 	
 	if (ul_y)
-		*ul_y = y * VP_H + TEXT_PAD;
+		*ul_y = y * v->vp_h + TEXT_PAD;
 }
 
-struct viewer *viewer_create(int x, int y, int z)
+struct viewer *viewer_create(int x, int y, int z, int window_w, int window_h)
 {
 	struct viewer *v;
 	int i;
@@ -163,12 +163,17 @@ struct viewer *viewer_create(int x, int y, int z)
 	// linear filtering = smooth scaling
 	SDL_SetHint("SDL_HINT_RENDER_SCALE_QUALITY", "1");
 	
+	// window contains 4 quadrants
+	// quadrant.wh = window.wh / 2
+	v->vp_w = window_w / 2;
+	v->vp_h = window_h / 2;
+	
 	v->window = SDL_CreateWindow(
 		WINDOW_NAME
 		, SDL_WINDOWPOS_UNDEFINED
 		, SDL_WINDOWPOS_UNDEFINED
-		, VP_W * 2 // window houses 2x2 viewports
-		, VP_H * 2
+		, v->vp_w * 2 // window houses 2x2 viewports
+		, v->vp_h * 2
 		, SDL_WINDOW_SHOWN
 	);
 	
@@ -630,7 +635,7 @@ static void draw_quadrant(struct viewer *v, int quadrant)
 	
 	/* draw subwindow */
 	viewer_get_quadrant(v, quadrant % 2, quadrant / 2, &x, &y);
-	rect = draw_aspect(ren, v->buf[quadrant], (SDL_Rect){x, y, VP_W, VP_H});
+	rect = draw_aspect(ren, v->buf[quadrant], (SDL_Rect){x, y, v->vp_w, v->vp_h});
 	
 	/* draw axes */
 	for (i = 0; v->show_axis_guides && i < 3; ++i)
@@ -723,7 +728,7 @@ int viewer_get_mouse_wheel_in_quadrant(struct viewer *v, int quadrant)
 	
 	viewer_get_quadrant(v, quadrant % 2, quadrant / 2, &x, &y);
 	
-	if (is_mouse_in_rect(v, x, y, VP_W, VP_H))
+	if (is_mouse_in_rect(v, x, y, v->vp_w, v->vp_h))
 		return v->mouse.wheel;
 	
 	return 0;

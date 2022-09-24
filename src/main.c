@@ -56,6 +56,8 @@ int main(int argc, char *argv[])
 	bool showViewer = false;
 	int series_low;
 	int series_high;
+	int viewer_width;
+	int viewer_height;
 	int width;
 	int height;
 	int points_minv = 0;
@@ -72,8 +74,10 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "  optional arguments (these are the --options):\n");
 		fprintf(stderr, "    --threads\n");
 		fprintf(stderr, "        * enables multithreading (if available)\n");
-		fprintf(stderr, "    --viewer\n");
+		fprintf(stderr, "    --viewer width,height\n");
 		fprintf(stderr, "        * opens viewer window after loading data\n");
+		fprintf(stderr, "        * width,height are window dimensions\n");
+		fprintf(stderr, "        * e.g. --viewer 700,700\n");
 		fprintf(stderr, "    --binary  W,H\n");
 		fprintf(stderr, "        * indicates input file is binary data\n");
 		fprintf(stderr, "          previously exported using the --dump option\n");
@@ -137,7 +141,15 @@ int main(int argc, char *argv[])
 		}
 		else if (!strcmp(this, "viewer"))
 		{
+			if (sscanf(next, "%d,%d", &viewer_width, &viewer_height) != 2)
+			{
+				fprintf(stderr, "argument '%s %s' malformatted\n", this, next);
+				return -1;
+			}
+			
 			showViewer = true;
+			
+			i += 1;
 		}
 		else if (!strcmp(this, "series"))
 		{
@@ -287,7 +299,7 @@ int main(int argc, char *argv[])
 		int threshold_min = 0;
 		int threshold_max = 255;
 		
-		if (!(viewer = viewer_create(w, h, num)))
+		if (!(viewer = viewer_create(w, h, num, viewer_width, viewer_height)))
 			return -1;
 		for (;;)
 		{

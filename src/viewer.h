@@ -6,7 +6,7 @@
 struct viewer;
 
 void viewer_upload_pixels(struct viewer *v, const void *src, int srcW, int srcH, int idx);
-struct viewer *viewer_create(int x, int y, int z);
+struct viewer *viewer_create(int x, int y, int z, int window_w, int window_h);
 int viewer_destroy(struct viewer *v);
 int viewer_events(struct viewer *v);
 int viewer_draw_quadrants(struct viewer *v);
