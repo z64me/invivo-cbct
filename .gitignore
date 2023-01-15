@@ -1,2 +1,3 @@
 *.inv
 bin/
+!inv/*.inv
