@@ -351,7 +351,7 @@ static inline int AppendedData_parse(struct inv *inv)
 	}
 	
 	/* allocate memory for 16-bit image data for each image */
-	inv->grayNum = (inv->grayJPC - 1) * inv->cmpno + cmpnoLast;
+	inv->grayNum = (inv->grayJPC - (cmpnoLast != 0)) * inv->cmpno + cmpnoLast;
 	inv->graySz = 2 * inv->grayWidth * inv->grayHeight * inv->grayNum;
 	inv->gray = calloc(1, inv->graySz);
 	if (!inv->gray)
@@ -1175,8 +1175,6 @@ int inv_write(struct inv *inv, const char *outfn, const char *firstname, const c
 	for (containerNum = 0; containerNum * inv->cmpno < (int)inv->grayNum; )
 		++containerNum;
 	cmpnoLast = inv->grayNum % inv->cmpno;
-	if (cmpnoLast == 0)
-		cmpnoLast = inv->cmpno;
 	imgrem = inv->grayNum;
 	
 	/* allocate space for size of each JPC container */
