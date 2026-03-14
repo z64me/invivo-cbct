@@ -1,3 +1,4 @@
 *.inv
 bin/
+build*/
 !inv/*.inv
