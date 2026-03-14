@@ -1,0 +1,62 @@
+[cmake]
+version = "3.15"
+cmkr-include = "cmake/cmkr.cmake"
+
+[variables]
+CMAKE_MODULE_PATH = "cmake"
+
+[project]
+name = "invivo-cbct"
+version = "1.0.0"
+languages = ["C"]
+
+[vcpkg]
+version = "2025.06.13"
+packages = ["sdl2", "jasper", "pthreads", "stb", "pkgconf"]
+overlay = "vcpkg-overlay"
+
+[find-package.SDL2]
+required = true
+config = true
+
+[find-package.JasPer]
+required = true
+
+[find-package.PThreads4W]
+required = true
+
+[find-package.Stb]
+required = true
+
+[target.invivo-cbct]
+type = "executable"
+sources = [
+    "src/main.c",
+    "src/inv.c",
+    "src/common.c",
+    "src/viewer.c",
+    "src/palette.c",
+    "src/base64/base64.c",
+    "src/stb_image/stb_image.c",
+]
+include-directories = [
+    "src/base64",
+    "${Stb_INCLUDE_DIR}",
+]
+compile-features = ["c_std_99"]
+compile-definitions = ["WANT_THREADS", "$<$<C_COMPILER_ID:MSVC>:_CRT_SECURE_NO_WARNINGS>"]
+compile-options = [
+    "$<$<C_COMPILER_ID:GNU,Clang>:-Wall>",
+    "$<$<C_COMPILER_ID:GNU,Clang>:-Wextra>",
+    "$<$<C_COMPILER_ID:GNU,Clang>:-pedantic>",
+    "$<$<AND:$<CONFIG:Release>,$<C_COMPILER_ID:GNU,Clang>>:-Ofast>",
+]
+link-options = [
+    "$<$<AND:$<CONFIG:Release>,$<C_COMPILER_ID:GNU,Clang>>:-s>",
+]
+link-libraries = [
+    "$<IF:$<TARGET_EXISTS:SDL2::SDL2>,SDL2::SDL2,SDL2::SDL2-static>",
+    "JasPer::jasper",
+    "PThreads4W::PThreads4W",
+    "$<$<NOT:$<PLATFORM_ID:Windows>>:m>",
+]

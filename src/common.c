@@ -34,29 +34,6 @@ void fputLEu32(const uint32_t v, FILE *fp)
 	fputc(v >> 24, fp);
 }
 
-/* memchr copy-pasted from Android Bionic
- * https://android.googlesource.com/platform/bionic/+/ics-mr0/libc/string/memchr.c
- */
-void *memchr(const void *mem, int c, size_t memSz)
-{
-	const unsigned char *p = mem;
-	const unsigned char *end = p + memSz;
-	for (;;) {
-		if (p >= end || p[0] == c) break;
-		p++;
-		if (p >= end || p[0] == c) break;
-		p++;
-		if (p >= end || p[0] == c) break;
-		p++;
-		if (p >= end || p[0] == c) break;
-		p++;
-	}
-	if (p >= end)
-		return 0;
-	else
-		return (void*) p;
-}
-
 /* memmem copy-pasted from Android Bionic
  * https://android.googlesource.com/platform/bionic/+/ics-mr0/libc/string/memmem.c
  */
